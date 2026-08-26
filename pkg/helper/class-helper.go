@@ -48,6 +48,7 @@ func SearchClass(tenantUUID string, payload model.SearchPayload) ([]model.ReadCl
 	query := `
 	with datas as(
 		select
+			c.uuid,
 			c.name,
 			c.abbr_name,
 			c."level",

@@ -27,10 +27,11 @@ type CreateClassModel struct {
 }
 
 type ReadClassModelResult struct {
-	Name            string  `db:"name"`
-	AbbrName        *string `db:"abbr_name"`
-	Level           int     `db:"level"`
-	HomeroomTeacher *string `db:"homeroom_teacher"`
-	Status          string  `db:"status"`
-	TotalStudent    int     `db:"total_student"`
+	UUID            uuid.UUID `db:"uuid"`
+	Name            string    `db:"name"`
+	AbbrName        *string   `db:"abbr_name"`
+	Level           int       `db:"level"`
+	HomeroomTeacher *string   `db:"homeroom_teacher"`
+	Status          string    `db:"status"`
+	TotalStudent    int       `db:"total_student"`
 }
