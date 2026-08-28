@@ -18,7 +18,7 @@ func InsertClass(data model.ClassModel) error {
 	}
 	defer tx.Rollback(context.Background())
 
-	query := `SELECT * FROM public.class WHERE lower(name) = lower($1) or lower(abbr_name) = lower($2) LIMIT 1`
+	query := `SELECT * FROM school_sch.class WHERE lower(name) = lower($1) or lower(abbr_name) = lower($2) LIMIT 1`
 	selectedClass, err := db.GetSingleDataByQuery[model.ClassModel](query, data.Name, data.AbbrName)
 	if err != nil {
 		if err.Error() != "no rows in result set" {
@@ -30,7 +30,7 @@ func InsertClass(data model.ClassModel) error {
 		return errors.New("class already exist")
 	}
 
-	query = `INSERT INTO public.class (name, abbr_name, level, homeroom_teacher,status_uuid, created_date, updated_date, tenant_uuid) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`
+	query = `INSERT INTO school_sch.class (name, abbr_name, level, homeroom_teacher,status_uuid, created_date, updated_date, tenant_uuid) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`
 	_, err = db.InsertReturnUUID(query, data.Name, data.AbbrName, data.Level, data.HomeroomTeacher, data.StatusUUID, data.CreatedDate, data.UpdatedDate, data.TenantUUID)
 	if err != nil {
 		if err.Error() != "no rows in result set" {
@@ -51,13 +51,13 @@ func SearchClass(tenantUUID string, payload model.SearchPayload) ([]model.ReadCl
 			c.uuid,
 			c.name,
 			c.abbr_name,
-			c."level",
-			u."name" as homeroom_teacher,
-			s."name" as status,
+			c.level,
+			u.name as homeroom_teacher,
+			s.name as status,
 			0 as total_student
-		from public.class c
-		left join public."user" u on c.homeroom_teacher = u."uuid"
-		left join public.status s on c.status_uuid = s."uuid"
+		from school_sch.class c
+		left join user_sch.user u on c.homeroom_teacher = u.uuid
+		left join public.status s on c.status_uuid = s.uuid
 		where c.tenant_uuid = $1
 	)
 	`

@@ -214,8 +214,8 @@ func GetLoginDataByEmail(email string) (*model.LoginData, error) {
 		u.version user_version,
 		r.name role_name,
 		r.level role_level
-	from public.tenant t
-	join public.user u on t.uuid = u.tenant_uuid
+	from user_sch.tenant t
+	join user_sch.user u on t.uuid = u.tenant_uuid
 	join public.role r on u.role_uuid = r.uuid
 	where u.email = $1
 	`, email)
