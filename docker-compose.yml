@@ -3,29 +3,16 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-
     expose:
       - "3000"
-
-    environment:
-      API_VERSION: ${API_VERSION}
-      JWT_ISSUER: ${JWT_ISSUER}
-      JWT_AUDIENCE: ${JWT_AUDIENCE}
-      JWT_KEY_ID: ${JWT_KEY_ID}
-      JWT_REFRESH_SECURE_KEY: ${JWT_REFRESH_SECURE_KEY}
-      ACCESS_TOKEN_DURATION: ${ACCESS_TOKEN_DURATION}
-      REFRESH_TOKEN_DURATION: ${REFRESH_TOKEN_DURATION}
-      RSA_PUBLIC_KEY: ${RSA_PUBLIC_KEY}
-      RSA_PRIVATE_KEY: ${RSA_PRIVATE_KEY}
-      RSA_PASSPHARSE: ${RSA_PASSPHARSE}
-      DATABASE_USERNAME: ${DATABASE_USERNAME}
-      DATABASE_PASSWORD: ${DATABASE_PASSWORD}
-      DATABASE_NAME: ${DATABASE_NAME}
-      DATABASE_URL: ${DATABASE_URL}
-
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.golangapp.rule=Host(`://178.83.188.214`)"
+      - "traefik.http.routers.golangapp.entrypoints=websecure"
+      - "traefik.http.routers.golangapp.tls.certresolver=myresolver"
+      - "traefik.http.services.golangapp.loadbalancer.server.port=3000"
     networks:
       - gakuren-network
-
 networks:
   gakuren-network:
     external: true
