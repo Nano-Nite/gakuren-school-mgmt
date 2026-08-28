@@ -10,7 +10,7 @@ import (
 )
 
 func SetupClassRoute(app *fiber.App, API_VERSION string) {
-	app.Post(API_VERSION+"/class/create", func(c fiber.Ctx) error {
+	app.Post(API_VERSION+"/school/class/create", func(c fiber.Ctx) error {
 		payload := new(model.CreateClassModel)
 		tenantUUIDHeader := c.Get("tenant_uuid")
 		//* validate body
@@ -51,7 +51,7 @@ func SetupClassRoute(app *fiber.App, API_VERSION string) {
 		return helper.ReturnResponse(c, fiber.StatusOK, "success", payload, nil)
 	})
 
-	app.Post(API_VERSION+"/class/get", func(c fiber.Ctx) error {
+	app.Post(API_VERSION+"/school/class/get", func(c fiber.Ctx) error {
 		payload := new(model.SearchPayload)
 		tenantUUID := c.Get("tenant_uuid")
 		//* validate body
