@@ -30,7 +30,7 @@ services:
     networks:
       gakuren-network:
         aliases:
-          - user-mgmt
+          - school-mgmt
 
 networks:
   gakuren-network:
