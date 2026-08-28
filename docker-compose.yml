@@ -1,14 +1,14 @@
 services:
-  user-mgmt:
+  school-mgmt:
     build:
       context: .
       dockerfile: Dockerfile
     labels:
       - "traefik.enable=true"
       - "traefik.docker.network=gakuren-network"
-      - "traefik.http.routers.user-mgmt.rule=PathPrefix(`/v1/school`)"
-      - "traefik.http.routers.user-mgmt.entrypoints=web"
-      - "traefik.http.services.user-mgmt.loadbalancer.server.port=3000"
+      - "traefik.http.routers.school-mgmt.rule=PathPrefix(`/v1/school`)"
+      - "traefik.http.routers.school-mgmt.entrypoints=web"
+      - "traefik.http.services.school-mgmt.loadbalancer.server.port=3000"
     expose:
       - "3000"
     environment:
