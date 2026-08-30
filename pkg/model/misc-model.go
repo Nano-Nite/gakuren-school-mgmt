@@ -22,7 +22,7 @@ type DataStatistics struct {
 
 type SearchPayload struct {
 	Search     *string                   `json:"search,omitempty"`
-	Filter     *ReadClassModelResult     `json:"filter,omitempty"`
+	Filter     *map[string]interface{}   `json:"filter,omitempty"`
 	Page       *int                      `json:"page,omitempty"`
 	RowPerPage *int                      `json:"row_per_page,omitempty"`
 	SortBy     *[]map[string]interface{} `json:"sort_by,omitempty"`

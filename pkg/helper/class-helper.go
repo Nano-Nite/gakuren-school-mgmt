@@ -82,7 +82,7 @@ func SearchClass(tenantUUID string, payload model.SearchPayload) ([]model.ReadCl
 	if payload.Filter != nil {
 		// log.Println(payload.Filter)
 		queryBuilder += ` and lower(status) = lower($` + strconv.Itoa(len(param)+1) + `)`
-		param = append(param, payload.Filter.Status)
+		param = append(param, (*payload.Filter)["status"].(string))
 	}
 
 	// run count first to get data statistic
