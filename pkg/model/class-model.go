@@ -7,15 +7,15 @@ import (
 )
 
 type ClassModel struct {
-	UUID            *uuid.UUID `db:"uuid"`
-	Name            string     `db:"name"`
-	AbbrName        *string    `db:"abbr_name"`
-	Level           int        `db:"level"`
-	HomeroomTeacher *uuid.UUID `db:"homeroom_teacher"`
-	StatusUUID      uuid.UUID  `db:"status_uuid"`
-	CreatedDate     time.Time  `db:"created_date"`
-	UpdatedDate     *time.Time `db:"updated_date"`
-	TenantUUID      uuid.UUID  `db:"tenant_uuid"`
+	UUID            *uuid.UUID `db:"uuid" json:"uuid"`
+	Name            string     `db:"name" json:"name"`
+	AbbrName        *string    `db:"abbr_name" json:"abbr_name"`
+	Level           int        `db:"level" json:"level"`
+	HomeroomTeacher *uuid.UUID `db:"homeroom_teacher" json:"homeroom_teacher"`
+	StatusUUID      uuid.UUID  `db:"status_uuid" json:"status_uuid"`
+	CreatedDate     time.Time  `db:"created_date" json:"created_date"`
+	UpdatedDate     *time.Time `db:"updated_date" json:"updated_date"`
+	TenantUUID      uuid.UUID  `db:"tenant_uuid" json:"tenant_uuid"`
 }
 
 type CreateClassModel struct {

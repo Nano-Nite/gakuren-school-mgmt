@@ -116,12 +116,8 @@ func SetupApprovalRoute(app *fiber.App, API_VERSION string) {
 			return helper.ReturnResponse(c, fiber.StatusBadRequest, "Bad request", nil, nil)
 		}
 
+		//* getting mandatory data
 		selectedUser, err := helper.GetUser(userUUID.String())
-		if err != nil {
-			return helper.ReturnResponse(c, fiber.StatusInternalServerError, "Internal server error, try again in a while", nil, nil)
-		}
-
-		selectedRole, err := helper.GetRole(selectedUser.RoleUUID.String())
 		if err != nil {
 			return helper.ReturnResponse(c, fiber.StatusInternalServerError, "Internal server error, try again in a while", nil, nil)
 		}
@@ -131,51 +127,40 @@ func SetupApprovalRoute(app *fiber.App, API_VERSION string) {
 			return helper.ReturnResponse(c, fiber.StatusInternalServerError, "Internal server error, try again in a while", nil, nil)
 		}
 
-		//* handle CANCEL approval
-		if strings.EqualFold(payload.Command, helper.ACTION_CODE_CANCEL) {
-			if selectedApproval.DetailApprovalHeader.CurrentStep != 1 {
-				return helper.ReturnResponse(c, fiber.StatusUnauthorized, "Unauthorized", nil, nil)
-			} else {
-				// canceling approval make notes as mandatory
-				if payload.Note == "" || len(payload.Note) == 0 {
-					return helper.ReturnResponse(c, fiber.StatusBadRequest, "Bad request", nil, errors.New("Missing notes"))
-				}
+		//* pre-data check
+		// status check
+		if !strings.EqualFold(selectedApproval.DetailApprovalHeader.Status, helper.STATUS_ACTIVE) {
+			return helper.ReturnResponse(c, fiber.StatusOK, "Approval already finalize", nil, errors.New("Approval already finalize"))
+		}
 
-				// status check
-				if !strings.EqualFold(selectedApproval.DetailApprovalHeader.Status, helper.STATUS_ACTIVE) {
-					return helper.ReturnResponse(c, fiber.StatusOK, "Approval already finalize", nil, errors.New("Approval already finalize"))
-				}
+		command := strings.ToUpper(strings.TrimSpace(payload.Command))
+		if command != helper.ACTION_CODE_CANCEL && command != helper.ACTION_CODE_REJECT && command != helper.ACTION_CODE_APPROVE {
+			return helper.ReturnResponse(c, fiber.StatusBadRequest, "Unsupported approval command", nil, nil)
+		}
+		if (command == helper.ACTION_CODE_CANCEL || command == helper.ACTION_CODE_REJECT) && strings.TrimSpace(payload.Note) == "" {
+			return helper.ReturnResponse(c, fiber.StatusBadRequest, "Note is required", nil, errors.New("missing note"))
+		}
 
-				// maker check
-				if !strings.EqualFold(selectedApproval.DetailApprovalHeader.RequestedBy, selectedUser.Name) {
-					return helper.ReturnResponse(c, fiber.StatusUnauthorized, "Unauthorized", nil, nil)
-				}
-
-				// role check
-				if !strings.EqualFold(selectedApproval.DetailApprovalHeader.RoleName, selectedRole.Name) {
-					return helper.ReturnResponse(c, fiber.StatusUnauthorized, "Unauthorized", nil, nil)
-				}
-
-				//* Update approval instance status
-				if err = helper.UpdateApprovalInstancteStatus(payload.UUID, helper.ACTION_CODE_CANCEL); err != nil {
-					return helper.ReturnResponse(c, fiber.StatusInternalServerError, "Internal server error, try again in a while", nil, err)
-				}
-
-				//* insert approval action -> Cancel
-				var approvalActionPayload model.ApprovalAction
-				approvalActionPayload.ApprovalInstanceUUID = selectedApproval.DetailApprovalHeader.UUID
-				approvalActionPayload.ApprovalStepUUID = nil
-				approvalActionPayload.ActionCode = helper.ACTION_CODE_CANCEL
-				approvalActionPayload.ActedBy = selectedUser.UUID
-				approvalActionPayload.Note = &payload.Note
-
-				if err = helper.InsertApprovalAction(approvalActionPayload); err != nil {
-					return helper.ReturnResponse(c, fiber.StatusInternalServerError, "Internal server error, try again in a while", nil, err)
-				}
-
+		var note *string
+		if strings.TrimSpace(payload.Note) != "" {
+			note = &payload.Note
+		}
+		finalized, err := helper.ExecuteApproval(payload.UUID, tenantUUID, selectedUser.UUID, selectedUser.RoleUUID, command, note)
+		if err != nil {
+			switch {
+			case errors.Is(err, helper.ErrApprovalFinalized):
+				return helper.ReturnResponse(c, fiber.StatusConflict, "Approval already finalized", nil, err)
+			case errors.Is(err, helper.ErrApprovalUnauthorized):
+				return helper.ReturnResponse(c, fiber.StatusUnauthorized, "Unauthorized", nil, err)
+			case errors.Is(err, helper.ErrApprovalDuplicateAction):
+				return helper.ReturnResponse(c, fiber.StatusConflict, "Approval step already actioned", nil, err)
+			default:
+				return helper.ReturnResponse(c, fiber.StatusInternalServerError, "Internal server error, try again in a while", nil, err)
 			}
 		}
 
-		return helper.ReturnResponse(c, fiber.StatusOK, "success", payload, nil)
+		result := map[string]interface{}{"uuid": payload.UUID, "command": command, "finalized": finalized}
+
+		return helper.ReturnResponse(c, fiber.StatusOK, "success", result, nil)
 	})
 }

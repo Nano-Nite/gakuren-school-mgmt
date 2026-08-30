@@ -2,13 +2,207 @@ package helper
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"fmt"
 	"strconv"
 	"strings"
 
 	"gakuren-system.com/pkg/db"
 	"gakuren-system.com/pkg/model"
+	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 )
+
+var (
+	ErrApprovalFinalized       = errors.New("approval already finalized")
+	ErrApprovalUnauthorized    = errors.New("user is not allowed to execute this approval")
+	ErrApprovalDuplicateAction = errors.New("user has already acted on this approval step")
+)
+
+// ExecuteApproval records an approval decision and updates the instance in one
+// transaction. The instance row is locked so two approvers cannot advance the
+// same step independently.
+func ExecuteApproval(instanceUUID, tenantUUID string, actedBy, roleUUID uuid.UUID, command string, note *string) (bool, error) {
+	command = strings.ToUpper(strings.TrimSpace(command))
+	if command != ACTION_CODE_CANCEL && command != ACTION_CODE_REJECT && command != ACTION_CODE_APPROVE {
+		return false, fmt.Errorf("unsupported approval command: %s", command)
+	}
+
+	tx, err := db.Conn.Begin(db.DBCtx)
+	if err != nil {
+		return false, err
+	}
+	defer tx.Rollback(context.Background())
+
+	var workflowUUID, requestedBy, statusUUID uuid.UUID
+	var currentStep int
+	var entityType, instanceAction string
+	var requestData json.RawMessage
+	err = tx.QueryRow(db.DBCtx, `
+		select approval_workflow_uuid, requested_by, current_step, status_uuid,
+		       entity_type, action_code, request_data
+		from approval.approval_instance
+		where uuid = $1 and tenant_uuid = $2
+		for update
+	`, instanceUUID, tenantUUID).Scan(
+		&workflowUUID, &requestedBy, &currentStep, &statusUUID,
+		&entityType, &instanceAction, &requestData,
+	)
+	if err != nil {
+		return false, err
+	}
+
+	var statusName string
+	if err = tx.QueryRow(db.DBCtx, `select name from public.status where uuid = $1`, statusUUID).Scan(&statusName); err != nil {
+		return false, err
+	}
+	if !strings.EqualFold(statusName, STATUS_ACTIVE) {
+		return false, ErrApprovalFinalized
+	}
+
+	var stepUUID uuid.UUID
+	var approverRoleUUID uuid.UUID
+	var requiredApprovals int
+	err = tx.QueryRow(db.DBCtx, `
+		select uuid, approver_role_uuid, required_approvals
+		from approval.approval_step
+		where approval_workflow_uuid = $1 and step_order = $2
+	`, workflowUUID, currentStep).Scan(&stepUUID, &approverRoleUUID, &requiredApprovals)
+	if err != nil {
+		return false, err
+	}
+
+	var actionStepUUID *uuid.UUID
+	if command == ACTION_CODE_CANCEL {
+		if requestedBy != actedBy || currentStep != 1 {
+			return false, ErrApprovalUnauthorized
+		}
+	} else {
+		if approverRoleUUID != roleUUID {
+			return false, ErrApprovalUnauthorized
+		}
+		actionStepUUID = &stepUUID
+
+		var alreadyActed bool
+		if err = tx.QueryRow(db.DBCtx, `
+			select exists (
+				select 1 from approval.approval_action
+				where approval_instance_uuid = $1
+				  and approval_step_uuid = $2
+				  and acted_by = $3
+				  and action_code in ($4, $5)
+			)
+		`, instanceUUID, stepUUID, actedBy, ACTION_CODE_APPROVE, ACTION_CODE_REJECT).Scan(&alreadyActed); err != nil {
+			return false, err
+		}
+		if alreadyActed {
+			return false, ErrApprovalDuplicateAction
+		}
+	}
+
+	_, err = tx.Exec(db.DBCtx, `
+		insert into approval.approval_action
+			(approval_instance_uuid, approval_step_uuid, action_code, acted_by, note, created_date)
+		values ($1, $2, $3, $4, $5, now())
+	`, instanceUUID, actionStepUUID, command, actedBy, note)
+	if err != nil {
+		return false, err
+	}
+
+	finalized := command == ACTION_CODE_CANCEL || command == ACTION_CODE_REJECT
+	if command == ACTION_CODE_APPROVE {
+		var approvalCount int
+		if err = tx.QueryRow(db.DBCtx, `
+			select count(distinct acted_by)
+			from approval.approval_action
+			where approval_instance_uuid = $1
+			  and approval_step_uuid = $2
+			  and action_code = $3
+		`, instanceUUID, stepUUID, ACTION_CODE_APPROVE).Scan(&approvalCount); err != nil {
+			return false, err
+		}
+
+		if approvalCount >= requiredApprovals {
+			var hasNextStep bool
+			if err = tx.QueryRow(db.DBCtx, `
+				select exists (
+					select 1 from approval.approval_step
+					where approval_workflow_uuid = $1 and step_order = $2
+				)
+			`, workflowUUID, currentStep+1).Scan(&hasNextStep); err != nil {
+				return false, err
+			}
+			if hasNextStep {
+				_, err = tx.Exec(db.DBCtx, `
+					update approval.approval_instance
+					set current_step = current_step + 1, updated_date = now()
+					where uuid = $1
+				`, instanceUUID)
+			} else {
+				finalized = true
+			}
+		}
+	}
+	if err != nil {
+		return false, err
+	}
+
+	if finalized {
+		var entityUUID *uuid.UUID
+		if command == ACTION_CODE_APPROVE {
+			switch {
+			case strings.EqualFold(entityType, CLASS_ENTITY_TYPE) && strings.EqualFold(instanceAction, ACTION_CODE_CREATE):
+				var classData model.ClassModel
+				if err = json.Unmarshal(requestData, &classData); err != nil {
+					return false, fmt.Errorf("decode class approval request: %w", err)
+				}
+				// Trust the instance tenant, not the serialized request tenant.
+				classData.TenantUUID, err = uuid.Parse(tenantUUID)
+				if err != nil {
+					return false, fmt.Errorf("invalid tenant UUID: %w", err)
+				}
+				var createdUUID uuid.UUID
+				err = tx.QueryRow(db.DBCtx, `
+					insert into school_sch.class
+						(name, abbr_name, level, homeroom_teacher, status_uuid, created_date, updated_date, tenant_uuid)
+					values ($1, $2, $3, $4, $5, $6, $7, $8)
+					returning uuid
+				`, classData.Name, classData.AbbrName, classData.Level, classData.HomeroomTeacher,
+					classData.StatusUUID, classData.CreatedDate, classData.UpdatedDate, classData.TenantUUID,
+				).Scan(&createdUUID)
+				if err != nil {
+					return false, fmt.Errorf("create approved class: %w", err)
+				}
+				entityUUID = &createdUUID
+			default:
+				return false, fmt.Errorf("unsupported approved entity/action: %s/%s", entityType, instanceAction)
+			}
+		}
+
+		var finalStatusUUID uuid.UUID
+		if err = tx.QueryRow(db.DBCtx, `select uuid from public.status where lower(name) = lower($1)`, command).Scan(&finalStatusUUID); err != nil {
+			if errors.Is(err, pgx.ErrNoRows) {
+				return false, fmt.Errorf("status %q is not configured", command)
+			}
+			return false, err
+		}
+		_, err = tx.Exec(db.DBCtx, `
+			update approval.approval_instance
+			set status_uuid = $1, finalized_by = $2, finalized_date = now(),
+			    updated_date = now(), entity_uuid = coalesce($3, entity_uuid)
+			where uuid = $4
+		`, finalStatusUUID, actedBy, entityUUID, instanceUUID)
+		if err != nil {
+			return false, err
+		}
+	}
+
+	if err = tx.Commit(db.DBCtx); err != nil {
+		return false, err
+	}
+	return finalized, nil
+}
 
 func MyApproval(uuid string, roleUUID string, payload model.SearchPayload) ([]model.MyApprovalResult, *model.DataStatistics, error) {
 	var param []interface{}
