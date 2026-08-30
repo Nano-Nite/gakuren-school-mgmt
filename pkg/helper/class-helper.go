@@ -3,7 +3,6 @@ package helper
 import (
 	"context"
 	"errors"
-	"log"
 	"strconv"
 	"strings"
 
@@ -81,7 +80,7 @@ func SearchClass(tenantUUID string, payload model.SearchPayload) ([]model.ReadCl
 
 	// filter
 	if payload.Filter != nil {
-		log.Println(payload.Filter)
+		// log.Println(payload.Filter)
 		queryBuilder += ` and lower(status) = lower($` + strconv.Itoa(len(param)+1) + `)`
 		param = append(param, payload.Filter.Status)
 	}
@@ -133,9 +132,6 @@ func SearchClass(tenantUUID string, payload model.SearchPayload) ([]model.ReadCl
 	if len(queryBuilder) > 0 {
 		query += `SELECT * FROM datas WHERE ` + queryBuilder
 	}
-
-	log.Println(query)
-	log.Println(param...)
 
 	selectedData, err := db.GetMultipleDataByQuery[model.ReadClassModelResult](query, param...)
 	if err != nil {

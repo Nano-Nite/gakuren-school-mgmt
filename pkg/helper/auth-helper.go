@@ -9,6 +9,7 @@ import (
 	"os"
 	"strings"
 
+	"gakuren-system.com/pkg/db"
 	"gakuren-system.com/pkg/model"
 	"github.com/golang-jwt/jwt/v5"
 )
@@ -77,4 +78,55 @@ func ValidateAccessToken(tokenString string) (*model.AccessTokenClaims, error) {
 	}
 
 	return claims, nil
+}
+
+func GetUserPermission(userUUID string, permission string) (bool, error) {
+	query := `
+	select distinct p.code from user_sch."user" u 
+	join user_sch.role r on u.role_uuid = r.uuid
+	join user_sch.role_permission rp on r.uuid = rp.role_uuid
+	join user_sch.permission p on rp.permission_uuid = p.uuid
+	where u.uuid = $1 and p.code = $2
+	limit 1`
+
+	selectedPermission, err := db.GetSingleDataByQuery[model.GetPermission](query, userUUID, permission)
+	if err != nil {
+		return false, err
+	}
+
+	if selectedPermission == nil {
+		return false, nil
+	}
+
+	return true, nil
+}
+
+func ApprovalBypass(userUUID string) (bool, error) {
+	query := `
+	select distinct p.code from user_sch."user" u 
+	join user_sch.role r on u.role_uuid = r.uuid
+	join user_sch.role_permission rp on r.uuid = rp.role_uuid
+	join user_sch.permission p on rp.permission_uuid = p.uuid
+	where u.uuid = $1 and p.code = $2
+	limit 1`
+
+	selectedPermission, err := db.GetSingleDataByQuery[model.GetPermission](query, userUUID, APPROVAL_BYPASS)
+	if err != nil {
+		return false, err
+	}
+
+	if selectedPermission == nil {
+		return false, nil
+	}
+
+	return true, nil
+}
+
+func GetUser(uuid string) (*model.UserModel, error) {
+	query := `select * from user_sch.user where uuid = $1`
+	selectedUser, err := db.GetSingleDataByQuery[model.UserModel](query, uuid)
+	if err != nil {
+		return nil, err
+	}
+	return selectedUser, nil
 }

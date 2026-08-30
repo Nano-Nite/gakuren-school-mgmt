@@ -1,5 +1,11 @@
 package model
 
+import (
+	"time"
+
+	"github.com/google/uuid"
+)
+
 type CountResult struct {
 	Count int `db:"count"`
 }
@@ -20,4 +26,20 @@ type SearchPayload struct {
 	Page       *int                      `json:"page,omitempty"`
 	RowPerPage *int                      `json:"row_per_page,omitempty"`
 	SortBy     *[]map[string]interface{} `json:"sort_by,omitempty"`
+}
+
+type GetPermission struct {
+	Code string `db:"code"`
+}
+
+type GetMenuUUID struct {
+	UUID uuid.UUID `db:"uuid"`
+}
+
+type VariableModel struct {
+	UUID        uuid.UUID  `db:"uuid"`
+	Key         string     `db:"key"`
+	Value       string     `db:"value"`
+	CreatedDate time.Time  `db:"created_date"`
+	UpdatedDate *time.Time `db:"updated_date"`
 }

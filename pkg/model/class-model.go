@@ -7,7 +7,7 @@ import (
 )
 
 type ClassModel struct {
-	UUID            uuid.UUID  `db:"uuid"`
+	UUID            *uuid.UUID `db:"uuid"`
 	Name            string     `db:"name"`
 	AbbrName        *string    `db:"abbr_name"`
 	Level           int        `db:"level"`
@@ -27,11 +27,11 @@ type CreateClassModel struct {
 }
 
 type ReadClassModelResult struct {
-	UUID            uuid.UUID `db:"uuid"`
-	Name            string    `db:"name"`
-	AbbrName        *string   `db:"abbr_name"`
-	Level           int       `db:"level"`
-	HomeroomTeacher *string   `db:"homeroom_teacher"`
-	Status          string    `db:"status"`
-	TotalStudent    int       `db:"total_student"`
+	UUID            uuid.UUID `db:"uuid" json:"uuid"`
+	Name            string    `db:"name" json:"name"`
+	AbbrName        *string   `db:"abbr_name" json:"abbr_name"`
+	Level           int       `db:"level" json:"level"`
+	HomeroomTeacher *string   `db:"homeroom_teacher" json:"homeroom_teacher"`
+	Status          string    `db:"status" json:"status"`
+	TotalStudent    int       `db:"total_student" json:"total_student"`
 }

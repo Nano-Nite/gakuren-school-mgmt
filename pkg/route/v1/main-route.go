@@ -44,8 +44,8 @@ func SetupRoutes() {
 	})
 
 	// child route setup
-	// SetupUserManagementRoutes(app, helper.API_VERSION)
 	SetupClassRoute(app, helper.API_VERSION)
+	SetupApprovalRoute(app, helper.API_VERSION)
 
 	port := strings.TrimSpace(os.Getenv("PORT"))
 	if port == "" {
