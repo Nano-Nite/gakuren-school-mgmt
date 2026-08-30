@@ -1,6 +1,7 @@
 package helper
 
 import (
+	"context"
 	"errors"
 	"strconv"
 	"strings"
@@ -160,24 +161,51 @@ func DetailApproval(uuid string, tenantUUID string) (*model.DetailApprovalModel,
 	}
 
 	query = `
+	with datas as(
+		select
+			ai."uuid" 
+			,ai.approval_workflow_uuid 
+			,aa.approval_step_uuid 
+			,aa.created_date as approve_date
+			,aa.note 
+			,aa.action_code 
+			,ai.current_step
+			,aa.acted_by 
+			,aa.created_date 
+			,(select r.name from user_sch.role r where r.uuid = s.role_uuid ) as role_name
+		from approval.approval_instance ai 
+		join approval.approval_action aa on aa.approval_instance_uuid = ai."uuid" 
+		left join user_sch.user s on aa.acted_by = s.uuid
+		where ai."uuid" = $1
+	), progress as (
+		select 
+			ai."uuid" as instance_uuid
+			,ai.current_step as instance_current_step
+			,t.*
+		from approval.approval_instance ai 
+		join approval.approval_step t on ai.approval_workflow_uuid = t.approval_workflow_uuid 
+		where ai."uuid" = $1
+	)
 	select 
-		case 
-			when ai.current_step = t.step_order then 'current'
-			when ai.current_step < t.step_order then 'future'
-			when ai.current_step > t.step_order then 'past'
+		COALESCE(datas.action_code, 'PENDING') AS action_code
+		,case 
+			when COALESCE(datas.current_step,progress.instance_current_step) = progress.step_order then 'current'
+			when COALESCE(datas.current_step,progress.instance_current_step) < progress.step_order  then 'future'
+			when COALESCE(datas.current_step,progress.instance_current_step) > progress.step_order then 'past'
+			when datas.action_code = 'SUBMIT' then 'init'
+			else 'past'
 		end as state
-		,r.name role_name
-		,s.name act_by
-		,aa.created_date as approve_date
-		,aa.note 
-	from approval.approval_step t 
-	join user_sch.role r on t.approver_role_uuid = r.uuid
-	join approval.approval_instance ai on ai.approval_workflow_uuid = t.approval_workflow_uuid 
-	left join approval.approval_action aa on ai.uuid = aa.approval_instance_uuid and t.uuid = aa.approval_step_uuid 
-	left join user_sch.user s on aa.acted_by = s.uuid
-	where t.approval_workflow_uuid = $1
+		,COALESCE(datas.role_name, r."name") AS role_name
+		,s."name" as act_by
+		,datas.created_date as approve_date
+		,datas.note
+	from datas
+	full join progress on datas.approval_workflow_uuid = progress.approval_workflow_uuid and datas.approval_step_uuid = progress.uuid
+	left join user_sch.role r on progress.approver_role_uuid = r.uuid
+	left join user_sch.user s on datas.acted_by = s.uuid
+	order by datas.approve_date asc, step_order asc
 	`
-	selectedProgress, err := db.GetMultipleDataByQuery[model.DetailApprovalProgress](query, selectedInstance.WorkflowUUID)
+	selectedProgress, err := db.GetMultipleDataByQuery[model.DetailApprovalProgress](query, uuid)
 	if err != nil {
 		if err.Error() != "no rows in result set" {
 			return nil, err
@@ -192,4 +220,52 @@ func DetailApproval(uuid string, tenantUUID string) (*model.DetailApprovalModel,
 	result.DetailApprovalProgress = *selectedProgress
 
 	return &result, nil
+}
+
+func UpdateApprovalInstancteStatus(uuid string, status string) error {
+	tx, err := db.Conn.Begin(db.DBCtx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(context.Background())
+
+	//* get Active Status
+	selectedStatus, err := GetStatusByName(status)
+	if err != nil {
+		return err
+	}
+	query := `UPDATE approval.approval_instance SET status_uuid = $1, updated_date = now() WHERE uuid = $2`
+	if err = db.ExecuteQuery(query, selectedStatus.UUID, uuid); err != nil {
+		return err
+	}
+
+	return tx.Commit(db.DBCtx)
+}
+
+func InsertApprovalAction(payload model.ApprovalAction) error {
+	tx, err := db.Conn.Begin(db.DBCtx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(context.Background())
+
+	query := `
+		insert into approval.approval_action (
+			approval_instance_uuid,
+			approval_step_uuid,
+			action_code,
+			acted_by,
+			note
+		) values ($1, $2, $3, $4, $5);
+	`
+	if err = db.ExecuteQuery(query,
+		payload.ApprovalInstanceUUID,
+		payload.ApprovalStepUUID,
+		payload.ActionCode,
+		payload.ActedBy,
+		payload.Note); err != nil {
+		return err
+	}
+
+	return tx.Commit(db.DBCtx)
 }

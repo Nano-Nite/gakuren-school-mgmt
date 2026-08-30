@@ -38,6 +38,7 @@ type DetailApprovalHeader struct {
 }
 
 type DetailApprovalProgress struct {
+	ActionCode  string     `db:"action_code" json:"action_code"`
 	State       string     `db:"state" json:"state"`
 	RoleName    string     `db:"role_name" json:"role_name"`
 	ActBy       *string    `db:"act_by" json:"act_by"`

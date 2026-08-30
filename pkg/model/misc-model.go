@@ -43,3 +43,9 @@ type VariableModel struct {
 	CreatedDate time.Time  `db:"created_date"`
 	UpdatedDate *time.Time `db:"updated_date"`
 }
+
+type ExecuteApprovalPayload struct {
+	UUID    string `db:"uuid" json:"uuid"`
+	Command string `db:"command" json:"command"`
+	Note    string `db:"note" json:"note"`
+}

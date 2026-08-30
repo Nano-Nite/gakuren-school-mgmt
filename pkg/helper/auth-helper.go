@@ -130,3 +130,12 @@ func GetUser(uuid string) (*model.UserModel, error) {
 	}
 	return selectedUser, nil
 }
+
+func GetRole(uuid string) (*model.RoleModel, error) {
+	query := `select * from user_sch.role where uuid = $1`
+	selectedUser, err := db.GetSingleDataByQuery[model.RoleModel](query, uuid)
+	if err != nil {
+		return nil, err
+	}
+	return selectedUser, nil
+}
