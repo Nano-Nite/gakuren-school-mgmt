@@ -36,18 +36,19 @@ func ExecuteApproval(instanceUUID, tenantUUID string, actedBy, roleUUID uuid.UUI
 	defer tx.Rollback(context.Background())
 
 	var workflowUUID, requestedBy, statusUUID uuid.UUID
+	var instanceEntityUUID *uuid.UUID
 	var currentStep int
 	var entityType, instanceAction string
 	var requestData json.RawMessage
 	err = tx.QueryRow(db.DBCtx, `
 		select approval_workflow_uuid, requested_by, current_step, status_uuid,
-		       entity_type, action_code, request_data
+		       entity_type, entity_uuid, action_code, request_data
 		from approval.approval_instance
 		where uuid = $1 and tenant_uuid = $2
 		for update
 	`, instanceUUID, tenantUUID).Scan(
 		&workflowUUID, &requestedBy, &currentStep, &statusUUID,
-		&entityType, &instanceAction, &requestData,
+		&entityType, &instanceEntityUUID, &instanceAction, &requestData,
 	)
 	if err != nil {
 		return false, err
@@ -152,6 +153,8 @@ func ExecuteApproval(instanceUUID, tenantUUID string, actedBy, roleUUID uuid.UUI
 		var entityUUID *uuid.UUID
 		if command == ACTION_CODE_APPROVE {
 			switch {
+			//* Class CRUD
+			//create
 			case strings.EqualFold(entityType, CLASS_ENTITY_TYPE) && strings.EqualFold(instanceAction, ACTION_CODE_CREATE):
 				// Decode UUIDs as text first so an empty optional UUID does not make
 				// json.Unmarshal reject the entire approval payload.
@@ -183,6 +186,72 @@ func ExecuteApproval(instanceUUID, tenantUUID string, actedBy, roleUUID uuid.UUI
 					return false, fmt.Errorf("create approved class: %w", err)
 				}
 				entityUUID = &createdUUID
+			// update
+			case strings.EqualFold(entityType, CLASS_ENTITY_TYPE) && strings.EqualFold(instanceAction, ACTION_CODE_UPDATE):
+				if instanceEntityUUID == nil {
+					return false, errors.New("class update approval is missing entity UUID")
+				}
+
+				mapData := make(map[string]interface{})
+				if err = json.Unmarshal(requestData, &mapData); err != nil {
+					return false, fmt.Errorf("decode class approval request: %w", err)
+				}
+
+				classData, convertErr := MapIntoStuct[model.ClassModel](mapData)
+				if convertErr != nil {
+					return false, fmt.Errorf("convert class approval request: %w", convertErr)
+				}
+
+				err = tx.QueryRow(db.DBCtx, `
+					update school_sch.class
+					set name = $1, abbr_name = $2, level = $3,
+					    homeroom_teacher = $4, status_uuid = $5, updated_date = now()
+					where uuid = $6 and tenant_uuid = $7
+					returning uuid
+				`, classData.Name, classData.AbbrName, classData.Level,
+					classData.HomeroomTeacher, classData.StatusUUID, instanceEntityUUID, tenantUUID,
+				).Scan(instanceEntityUUID)
+				if errors.Is(err, pgx.ErrNoRows) {
+					return false, errors.New("approved class update target not found")
+				}
+				if err != nil {
+					return false, fmt.Errorf("update approved class: %w", err)
+				}
+				entityUUID = instanceEntityUUID
+			// delete
+			case strings.EqualFold(entityType, CLASS_ENTITY_TYPE) && strings.EqualFold(instanceAction, ACTION_CODE_DELETE):
+				if instanceEntityUUID == nil {
+					return false, errors.New("class delete approval is missing entity UUID")
+				}
+
+				var inactiveStatusUUID uuid.UUID
+				err = tx.QueryRow(db.DBCtx, `
+					select uuid
+					from public.status
+					where lower(name) = lower($1)
+					limit 1
+				`, STATUS_INACTIVE).Scan(&inactiveStatusUUID)
+				if errors.Is(err, pgx.ErrNoRows) {
+					return false, errors.New("inactive status is not configured")
+				}
+				if err != nil {
+					return false, fmt.Errorf("get inactive status: %w", err)
+				}
+
+				err = tx.QueryRow(db.DBCtx, `
+					update school_sch.class
+					set status_uuid = $1, updated_date = now()
+					where uuid = $2 and tenant_uuid = $3
+					returning uuid
+				`, inactiveStatusUUID, instanceEntityUUID, tenantUUID).Scan(instanceEntityUUID)
+				if errors.Is(err, pgx.ErrNoRows) {
+					return false, errors.New("approved class delete target not found")
+				}
+				if err != nil {
+					return false, fmt.Errorf("soft-delete approved class: %w", err)
+				}
+				entityUUID = instanceEntityUUID
+
 			default:
 				return false, fmt.Errorf("unsupported approved entity/action: %s/%s", entityType, instanceAction)
 			}

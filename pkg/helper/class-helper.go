@@ -3,12 +3,67 @@ package helper
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strconv"
 	"strings"
 
 	"gakuren-system.com/pkg/db"
 	"gakuren-system.com/pkg/model"
+	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 )
+
+func GetClass(classUUID, tenantUUID uuid.UUID) (*model.ClassModel, error) {
+	classData, err := db.GetSingleDataByQuery[model.ClassModel](`
+		select uuid, name, abbr_name, level, homeroom_teacher, status_uuid,
+		       created_date, updated_date, tenant_uuid
+		from school_sch.class
+		where uuid = $1 and tenant_uuid = $2
+	`, classUUID, tenantUUID)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) || err.Error() == "no rows in result set" {
+			return nil, errors.New("class not found")
+		}
+		return nil, err
+	}
+	return classData, nil
+}
+
+func UpdateClass(data model.ClassModel) error {
+	result, err := db.Conn.Exec(db.DBCtx, `
+		update school_sch.class
+		set name = $1, abbr_name = $2, level = $3,
+		    homeroom_teacher = $4, updated_date = now()
+		where uuid = $5 and tenant_uuid = $6
+	`, data.Name, data.AbbrName, data.Level, data.HomeroomTeacher, data.UUID, data.TenantUUID)
+	if err != nil {
+		return fmt.Errorf("update class: %w", err)
+	}
+	if result.RowsAffected() == 0 {
+		return errors.New("class not found")
+	}
+	return nil
+}
+
+func SoftDeleteClass(classUUID, tenantUUID uuid.UUID) error {
+	status, err := GetStatusByName(STATUS_INACTIVE)
+	if err != nil {
+		return fmt.Errorf("get inactive status: %w", err)
+	}
+
+	result, err := db.Conn.Exec(db.DBCtx, `
+		update school_sch.class
+		set status_uuid = $1, updated_date = now()
+		where uuid = $2 and tenant_uuid = $3
+	`, status.UUID, classUUID, tenantUUID)
+	if err != nil {
+		return fmt.Errorf("soft-delete class: %w", err)
+	}
+	if result.RowsAffected() == 0 {
+		return errors.New("class not found")
+	}
+	return nil
+}
 
 func InsertClass(data model.ClassModel) error {
 	tx, err := db.Conn.Begin(db.DBCtx)
@@ -80,9 +135,14 @@ func SearchClass(tenantUUID string, payload model.SearchPayload) ([]model.ReadCl
 
 	// filter
 	if payload.Filter != nil {
-		// log.Println(payload.Filter)
-		queryBuilder += ` and lower(status) = lower($` + strconv.Itoa(len(param)+1) + `)`
-		param = append(param, (*payload.Filter)["status"].(string))
+		if (*payload.Filter)["status"] != nil {
+			queryBuilder += ` and lower(status) = lower($` + strconv.Itoa(len(param)+1) + `)`
+			param = append(param, (*payload.Filter)["status"].(string))
+		}
+		if (*payload.Filter)["uuid"] != nil {
+			queryBuilder += ` and datas.uuid = $` + strconv.Itoa(len(param)+1)
+			param = append(param, (*payload.Filter)["uuid"].(string))
+		}
 	}
 
 	// run count first to get data statistic

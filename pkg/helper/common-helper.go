@@ -407,10 +407,6 @@ func GenerateTicketNumber(sequence int, documentCode, moduleCode, institutionCod
 func MapIntoStuct[T any](source map[string]interface{}) (*T, error) {
 	var result T
 
-	// Normalize keys to the target's JSON field names. Approval payloads may
-	// contain either Go field names (CreatedDate) or JSON names (created_date).
-	// Keeping string representations intact lets encoding/json invoke the
-	// standard unmarshallers implemented by uuid.UUID and time.Time.
 	normalized := make(map[string]any, len(source))
 	targetType := reflect.TypeOf(result)
 	if targetType.Kind() != reflect.Struct {

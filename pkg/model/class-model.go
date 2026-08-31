@@ -26,6 +26,18 @@ type CreateClassModel struct {
 	TenantUUID      *uuid.UUID `json:"tenant_uuid"`
 }
 
+type UpdateClassModel struct {
+	UUID            uuid.UUID  `json:"uuid"`
+	Name            string     `json:"name"`
+	AbbrName        *string    `json:"abbr_name,omitempty"`
+	Level           int        `json:"level"`
+	HomeroomTeacher *uuid.UUID `json:"homeroom_teacher,omitempty"`
+}
+
+type DeleteClassModel struct {
+	UUID uuid.UUID `json:"uuid"`
+}
+
 type ReadClassModelResult struct {
 	UUID            uuid.UUID `db:"uuid" json:"uuid"`
 	Name            string    `db:"name" json:"name"`
