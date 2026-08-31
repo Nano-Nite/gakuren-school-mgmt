@@ -8,16 +8,19 @@ RUN go mod download
 
 COPY . .
 
-RUN CGO_ENABLED=0 go build -o server .
+RUN CGO_ENABLED=0 go build \
+    -trimpath \
+    -buildvcs=false \
+    -ldflags="-s -w -buildid=" \
+    -o /server .
 
-FROM alpine:3.22
+FROM scratch
 
-WORKDIR /app
-
-RUN apk add --no-cache ca-certificates
-
-COPY --from=builder /app/server .
+COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
+COPY --from=builder /server /server
 
 EXPOSE 3000
 
-CMD ["./server"]
+USER 65532:65532
+
+ENTRYPOINT ["/server"]
