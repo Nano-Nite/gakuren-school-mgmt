@@ -9,6 +9,7 @@ import (
 	"log"
 	"math"
 	"os"
+	"reflect"
 	"strings"
 	"time"
 
@@ -401,4 +402,45 @@ func GenerateTicketNumber(sequence int, documentCode, moduleCode, institutionCod
 		romanMonths[int(requestDate.Month())-1],
 		requestDate.Year(),
 	), nil
+}
+
+func MapIntoStuct[T any](source map[string]interface{}) (*T, error) {
+	var result T
+
+	// Normalize keys to the target's JSON field names. Approval payloads may
+	// contain either Go field names (CreatedDate) or JSON names (created_date).
+	// Keeping string representations intact lets encoding/json invoke the
+	// standard unmarshallers implemented by uuid.UUID and time.Time.
+	normalized := make(map[string]any, len(source))
+	targetType := reflect.TypeOf(result)
+	if targetType.Kind() != reflect.Struct {
+		return &result, fmt.Errorf("MapIntoStuct target must be a struct, got %s", targetType.Kind())
+	}
+
+	for sourceKey, value := range source {
+		destinationKey := sourceKey
+		for i := 0; i < targetType.NumField(); i++ {
+			field := targetType.Field(i)
+			jsonKey := strings.Split(field.Tag.Get("json"), ",")[0]
+			if jsonKey == "-" {
+				continue
+			}
+			if jsonKey == "" {
+				jsonKey = field.Name
+			}
+			if strings.EqualFold(sourceKey, field.Name) || strings.EqualFold(sourceKey, jsonKey) {
+				destinationKey = jsonKey
+				break
+			}
+		}
+		normalized[destinationKey] = value
+	}
+
+	bytes, err := json.Marshal(normalized)
+	if err != nil {
+		return &result, err
+	}
+
+	err = json.Unmarshal(bytes, &result)
+	return &result, err
 }

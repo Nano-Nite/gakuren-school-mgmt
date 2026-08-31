@@ -153,10 +153,18 @@ func ExecuteApproval(instanceUUID, tenantUUID string, actedBy, roleUUID uuid.UUI
 		if command == ACTION_CODE_APPROVE {
 			switch {
 			case strings.EqualFold(entityType, CLASS_ENTITY_TYPE) && strings.EqualFold(instanceAction, ACTION_CODE_CREATE):
-				var classData model.ClassModel
-				if err = json.Unmarshal(requestData, &classData); err != nil {
+				// Decode UUIDs as text first so an empty optional UUID does not make
+				// json.Unmarshal reject the entire approval payload.
+				mapData := make(map[string]interface{})
+				if err = json.Unmarshal(requestData, &mapData); err != nil {
 					return false, fmt.Errorf("decode class approval request: %w", err)
 				}
+
+				classData, err := MapIntoStuct[model.ClassModel](mapData)
+				if err != nil {
+					return false, fmt.Errorf("convert class approval request: %w", err)
+				}
+
 				// Trust the instance tenant, not the serialized request tenant.
 				classData.TenantUUID, err = uuid.Parse(tenantUUID)
 				if err != nil {
@@ -180,10 +188,26 @@ func ExecuteApproval(instanceUUID, tenantUUID string, actedBy, roleUUID uuid.UUI
 			}
 		}
 
+		statusCandidates := []string{command}
+		switch command {
+		case ACTION_CODE_APPROVE:
+			statusCandidates = append(statusCandidates, "APPROVED")
+		case ACTION_CODE_REJECT:
+			statusCandidates = append(statusCandidates, "REJECTED")
+		case ACTION_CODE_CANCEL:
+			statusCandidates = append(statusCandidates, "CANCELLED", "CANCELED")
+		}
+
 		var finalStatusUUID uuid.UUID
-		if err = tx.QueryRow(db.DBCtx, `select uuid from public.status where lower(name) = lower($1)`, command).Scan(&finalStatusUUID); err != nil {
+		if err = tx.QueryRow(db.DBCtx, `
+			select uuid
+			from public.status
+			where lower(name) = any($1)
+			order by array_position($1, lower(name))
+			limit 1
+		`, lowerStrings(statusCandidates)).Scan(&finalStatusUUID); err != nil {
 			if errors.Is(err, pgx.ErrNoRows) {
-				return false, fmt.Errorf("status %q is not configured", command)
+				return false, fmt.Errorf("no final status is configured for command %q", command)
 			}
 			return false, err
 		}
@@ -202,6 +226,14 @@ func ExecuteApproval(instanceUUID, tenantUUID string, actedBy, roleUUID uuid.UUI
 		return false, err
 	}
 	return finalized, nil
+}
+
+func lowerStrings(values []string) []string {
+	result := make([]string, len(values))
+	for i, value := range values {
+		result[i] = strings.ToLower(value)
+	}
+	return result
 }
 
 func MyApproval(uuid string, roleUUID string, payload model.SearchPayload) ([]model.MyApprovalResult, *model.DataStatistics, error) {
@@ -383,10 +415,11 @@ func DetailApproval(uuid string, tenantUUID string) (*model.DetailApprovalModel,
 	select 
 		COALESCE(datas.action_code, 'PENDING') AS action_code
 		,case 
+			when datas.action_code = 'SUBMIT' then 'past'
+			when datas.action_code in ('APPROVE', 'REJECT', 'CANCEL') then 'past'
 			when COALESCE(datas.current_step,progress.instance_current_step) = progress.step_order then 'current'
 			when COALESCE(datas.current_step,progress.instance_current_step) < progress.step_order  then 'future'
 			when COALESCE(datas.current_step,progress.instance_current_step) > progress.step_order then 'past'
-			when datas.action_code = 'SUBMIT' then 'init'
 			else 'past'
 		end as state
 		,COALESCE(datas.role_name, r."name") AS role_name
