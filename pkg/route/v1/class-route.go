@@ -3,6 +3,7 @@ package v1
 import (
 	"encoding/json"
 	"errors"
+	"strings"
 	"time"
 
 	"gakuren-system.com/pkg/helper"
@@ -57,12 +58,6 @@ func SetupClassRoute(app *fiber.App, API_VERSION string) {
 			return helper.ReturnResponse(c, fiber.StatusBadRequest, "Invalid or Missing between request body and header", nil, nil)
 		}
 
-		//* get Active Status
-		status, err := helper.GetStatusByName(helper.STATUS_ACTIVE)
-		if err != nil {
-			return helper.ReturnResponse(c, fiber.StatusInternalServerError, "Internal server error, try again in a while", nil, nil)
-		}
-
 		var insertData model.ClassModel
 		insertData.UUID = nil
 		insertData.Name = payload.Name
@@ -71,7 +66,7 @@ func SetupClassRoute(app *fiber.App, API_VERSION string) {
 		}
 		insertData.Level = payload.Level
 		insertData.HomeroomTeacher = payload.HomeroomTeacher
-		insertData.StatusUUID = status.UUID
+		insertData.StatusUUID = helper.DB_UUID_STATUS_ACTIVE
 		insertData.CreatedDate = time.Now()
 		insertData.UpdatedDate = nil
 		insertData.TenantUUID = tenantUUID
@@ -82,7 +77,7 @@ func SetupClassRoute(app *fiber.App, API_VERSION string) {
 			}
 		} else { // if user cannot bypass approval
 			//* workflow approval logic
-			selectedWorkflow, err := helper.DetermineWorkflowApproval(tenantUUID.String(), userUUID.String(), helper.CREATE_CLASS_PERMISSION, helper.ACTION_CODE_CREATE, status.UUID.String())
+			selectedWorkflow, err := helper.DetermineWorkflowApproval(tenantUUID.String(), userUUID.String(), helper.CREATE_CLASS_PERMISSION, helper.ACTION_CODE_CREATE, helper.DB_UUID_STATUS_ACTIVE.String())
 			if err != nil {
 				if err.Error() != "no rows in result set" {
 					return helper.ReturnResponse(c, fiber.StatusUnauthorized, "Access Denied", nil, nil)
@@ -119,7 +114,7 @@ func SetupClassRoute(app *fiber.App, API_VERSION string) {
 				instance.EntityUUID = nil
 				instance.ActionCode = helper.ACTION_CODE_CREATE
 				instance.RequestData = json.RawMessage(payloadJson)
-				instance.StatusUUID = status.UUID
+				instance.StatusUUID = helper.DB_UUID_STATUS_ACTIVE
 				instance.RequestedBy = *userUUID
 				instance.FinalizedBy = nil
 				instance.FinalizedDate = nil
@@ -150,6 +145,8 @@ func SetupClassRoute(app *fiber.App, API_VERSION string) {
 
 		return helper.ReturnResponse(c, fiber.StatusOK, "success", payload, nil)
 	})
+
+	// update
 	app.Patch(API_VERSION+"/school/class/update", func(c fiber.Ctx) error {
 		payload := new(model.UpdateClassModel)
 		tenantUUID, userUUID, err := validateClassRequest(c)
@@ -166,15 +163,27 @@ func SetupClassRoute(app *fiber.App, API_VERSION string) {
 			return helper.ReturnResponse(c, fiber.StatusUnauthorized, "Access Denied", nil, permissionErr)
 		}
 
+		// get data
 		classData, err := helper.GetClass(payload.UUID, tenantUUID)
 		if err != nil {
 			return helper.ReturnResponse(c, fiber.StatusNotFound, "Class not found", nil, err)
 		}
-		classData.Name = payload.Name
-		classData.AbbrName = payload.AbbrName
-		classData.Level = payload.Level
-		classData.HomeroomTeacher = payload.HomeroomTeacher
 
+		// status check
+		if classData.StatusUUID != helper.DB_UUID_STATUS_ACTIVE && classData.StatusUUID != helper.DB_UUID_STATUS_INACTIVE {
+			return helper.ReturnResponse(c, fiber.StatusInternalServerError, "Update rejected due current status is pending", nil, err)
+		}
+
+		if classData.StatusUUID == helper.DB_UUID_STATUS_INACTIVE && strings.EqualFold(payload.Status, helper.STATUS_ACTIVE) { // activate case
+			classData.StatusUUID = helper.DB_UUID_STATUS_ACTIVE
+		} else {
+			classData.Name = payload.Name
+			classData.AbbrName = payload.AbbrName
+			classData.Level = payload.Level
+			classData.HomeroomTeacher = payload.HomeroomTeacher
+		}
+
+		// bypass check
 		canBypass, bypassErr := helper.ApprovalBypass(userUUID.String())
 		if bypassErr != nil && bypassErr.Error() != "no rows in result set" {
 			return helper.ReturnResponse(c, fiber.StatusInternalServerError, "Internal server error, try again in a while", nil, bypassErr)
@@ -186,11 +195,7 @@ func SetupClassRoute(app *fiber.App, API_VERSION string) {
 			return helper.ReturnResponse(c, fiber.StatusOK, "success", payload, nil)
 		}
 
-		activeStatus, err := helper.GetStatusByName(helper.STATUS_ACTIVE)
-		if err != nil {
-			return helper.ReturnResponse(c, fiber.StatusInternalServerError, "Active status is not configured", nil, err)
-		}
-		workflow, workflowErr := helper.DetermineWorkflowApproval(tenantUUID.String(), userUUID.String(), helper.UPDATE_CLASS_PERMISSION, helper.ACTION_CODE_UPDATE, activeStatus.UUID.String())
+		workflow, workflowErr := helper.DetermineWorkflowApproval(tenantUUID.String(), userUUID.String(), helper.UPDATE_CLASS_PERMISSION, helper.ACTION_CODE_UPDATE, helper.DB_UUID_STATUS_ACTIVE.String())
 		if workflowErr != nil && workflowErr.Error() != "no rows in result set" {
 			return helper.ReturnResponse(c, fiber.StatusInternalServerError, "Failed to determine approval workflow", nil, workflowErr)
 		}
@@ -201,13 +206,21 @@ func SetupClassRoute(app *fiber.App, API_VERSION string) {
 			return helper.ReturnResponse(c, fiber.StatusOK, "success", payload, nil)
 		}
 
-		instanceUUID, err := createClassApproval(*workflow, tenantUUID, userUUID, &payload.UUID, helper.ACTION_CODE_UPDATE, classData, activeStatus.UUID)
+		instanceUUID, err := createClassApproval(*workflow, tenantUUID, userUUID, &payload.UUID, helper.ACTION_CODE_UPDATE, classData, helper.DB_UUID_STATUS_ACTIVE)
 		if err != nil {
 			return helper.ReturnResponse(c, fiber.StatusInternalServerError, "Failed to create class update approval", nil, err)
 		}
+
+		// update status data
+		classData.StatusUUID = helper.DB_UUID_STATUS_PENDING
+		if err = helper.UpdateClassStatus(*classData); err != nil {
+			return helper.ReturnResponse(c, fiber.StatusInternalServerError, "Failed make status inactive", nil, err)
+		}
+
 		return helper.ReturnResponse(c, fiber.StatusOK, "success", map[string]any{"uuid": payload.UUID, "approval_uuid": instanceUUID}, nil)
 	})
 
+	// delete
 	app.Delete(API_VERSION+"/school/class/delete", func(c fiber.Ctx) error {
 		payload := new(model.DeleteClassModel)
 		tenantUUID, userUUID, err := validateClassRequest(c)
@@ -225,6 +238,12 @@ func SetupClassRoute(app *fiber.App, API_VERSION string) {
 		if err != nil {
 			return helper.ReturnResponse(c, fiber.StatusNotFound, "Class not found", nil, err)
 		}
+
+		// status check
+		if classData.StatusUUID != helper.DB_UUID_STATUS_ACTIVE {
+			return helper.ReturnResponse(c, fiber.StatusInternalServerError, "Delete rejected due current status is not active", nil, err)
+		}
+
 		canBypass, bypassErr := helper.ApprovalBypass(userUUID.String())
 		if bypassErr != nil && bypassErr.Error() != "no rows in result set" {
 			return helper.ReturnResponse(c, fiber.StatusInternalServerError, "Internal server error, try again in a while", nil, bypassErr)
@@ -236,11 +255,7 @@ func SetupClassRoute(app *fiber.App, API_VERSION string) {
 			return helper.ReturnResponse(c, fiber.StatusOK, "success", payload, nil)
 		}
 
-		activeStatus, err := helper.GetStatusByName(helper.STATUS_ACTIVE)
-		if err != nil {
-			return helper.ReturnResponse(c, fiber.StatusInternalServerError, "Active status is not configured", nil, err)
-		}
-		workflow, workflowErr := helper.DetermineWorkflowApproval(tenantUUID.String(), userUUID.String(), helper.DELETE_CLASS_PERMISSION, helper.ACTION_CODE_DELETE, activeStatus.UUID.String())
+		workflow, workflowErr := helper.DetermineWorkflowApproval(tenantUUID.String(), userUUID.String(), helper.DELETE_CLASS_PERMISSION, helper.ACTION_CODE_DELETE, helper.DB_UUID_STATUS_ACTIVE.String())
 		if workflowErr != nil && workflowErr.Error() != "no rows in result set" {
 			return helper.ReturnResponse(c, fiber.StatusInternalServerError, "Failed to determine approval workflow", nil, workflowErr)
 		}
@@ -251,13 +266,21 @@ func SetupClassRoute(app *fiber.App, API_VERSION string) {
 			return helper.ReturnResponse(c, fiber.StatusOK, "success", payload, nil)
 		}
 
-		instanceUUID, err := createClassApproval(*workflow, tenantUUID, userUUID, &payload.UUID, helper.ACTION_CODE_DELETE, classData, activeStatus.UUID)
+		instanceUUID, err := createClassApproval(*workflow, tenantUUID, userUUID, &payload.UUID, helper.ACTION_CODE_DELETE, classData, helper.DB_UUID_STATUS_ACTIVE)
 		if err != nil {
 			return helper.ReturnResponse(c, fiber.StatusInternalServerError, "Failed to create class delete approval", nil, err)
 		}
+
+		// update status data
+		classData.StatusUUID = helper.DB_UUID_STATUS_PENDING
+		if err = helper.UpdateClassStatus(*classData); err != nil {
+			return helper.ReturnResponse(c, fiber.StatusInternalServerError, "Failed make status inactive", nil, err)
+		}
+
 		return helper.ReturnResponse(c, fiber.StatusOK, "success", map[string]any{"uuid": payload.UUID, "approval_uuid": instanceUUID}, nil)
 	})
 
+	// get
 	app.Post(API_VERSION+"/school/class/get", func(c fiber.Ctx) error {
 		payload := new(model.SearchPayload)
 		tenantUUID := c.Get("tenant_uuid")

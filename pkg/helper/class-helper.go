@@ -45,6 +45,21 @@ func UpdateClass(data model.ClassModel) error {
 	return nil
 }
 
+func UpdateClassStatus(data model.ClassModel) error {
+	result, err := db.Conn.Exec(db.DBCtx, `
+		update school_sch.class
+		set status_uuid = $1, updated_date = now()
+		where uuid = $2 and tenant_uuid = $3
+	`, data.StatusUUID, data.UUID, data.TenantUUID)
+	if err != nil {
+		return fmt.Errorf("update class: %w", err)
+	}
+	if result.RowsAffected() == 0 {
+		return errors.New("class not found")
+	}
+	return nil
+}
+
 func SoftDeleteClass(classUUID, tenantUUID uuid.UUID) error {
 	status, err := GetStatusByName(STATUS_INACTIVE)
 	if err != nil {

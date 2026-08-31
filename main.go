@@ -13,6 +13,9 @@ func main() {
 	log.Println("Connecting to the database")
 	db.ConnectDB()
 
+	// Init DB Variable
+	helper.InitVariableDB()
+
 	// Run JWT Service
 	// log.Println("Starting JWT Service")
 	// if err := auth.NewJWTService(); err != nil {

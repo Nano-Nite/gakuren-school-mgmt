@@ -151,7 +151,8 @@ func ExecuteApproval(instanceUUID, tenantUUID string, actedBy, roleUUID uuid.UUI
 
 	if finalized {
 		var entityUUID *uuid.UUID
-		if command == ACTION_CODE_APPROVE {
+		switch command {
+		case ACTION_CODE_APPROVE:
 			switch {
 			//* Class CRUD
 			//create
@@ -197,6 +198,20 @@ func ExecuteApproval(instanceUUID, tenantUUID string, actedBy, roleUUID uuid.UUI
 					return false, fmt.Errorf("decode class approval request: %w", err)
 				}
 
+				var activeStatusUUID uuid.UUID
+				err = tx.QueryRow(db.DBCtx, `
+					select uuid
+					from public.status
+					where lower(name) = lower($1)
+					limit 1
+				`, STATUS_INACTIVE).Scan(&activeStatusUUID)
+				if errors.Is(err, pgx.ErrNoRows) {
+					return false, errors.New("active status is not configured")
+				}
+				if err != nil {
+					return false, fmt.Errorf("get active status: %w", err)
+				}
+
 				classData, convertErr := MapIntoStuct[model.ClassModel](mapData)
 				if convertErr != nil {
 					return false, fmt.Errorf("convert class approval request: %w", convertErr)
@@ -209,7 +224,7 @@ func ExecuteApproval(instanceUUID, tenantUUID string, actedBy, roleUUID uuid.UUI
 					where uuid = $6 and tenant_uuid = $7
 					returning uuid
 				`, classData.Name, classData.AbbrName, classData.Level,
-					classData.HomeroomTeacher, classData.StatusUUID, instanceEntityUUID, tenantUUID,
+					classData.HomeroomTeacher, activeStatusUUID, instanceEntityUUID, tenantUUID,
 				).Scan(instanceEntityUUID)
 				if errors.Is(err, pgx.ErrNoRows) {
 					return false, errors.New("approved class update target not found")
@@ -255,6 +270,44 @@ func ExecuteApproval(instanceUUID, tenantUUID string, actedBy, roleUUID uuid.UUI
 			default:
 				return false, fmt.Errorf("unsupported approved entity/action: %s/%s", entityType, instanceAction)
 			}
+		case ACTION_CODE_CANCEL, ACTION_CODE_REJECT:
+			switch {
+			//* Class
+			case strings.EqualFold(entityType, CLASS_ENTITY_TYPE):
+				if instanceEntityUUID == nil {
+					return false, errors.New("class cancel approval is missing entity UUID")
+				}
+
+				var activeStatusUUID uuid.UUID
+				err = tx.QueryRow(db.DBCtx, `
+					select uuid
+					from public.status
+					where lower(name) = lower($1)
+					limit 1
+				`, STATUS_ACTIVE).Scan(&activeStatusUUID)
+				if errors.Is(err, pgx.ErrNoRows) {
+					return false, errors.New("active status is not configured")
+				}
+				if err != nil {
+					return false, fmt.Errorf("get active status: %w", err)
+				}
+
+				err = tx.QueryRow(db.DBCtx, `
+					update school_sch.class
+					set status_uuid = $1, updated_date = now()
+					where uuid = $2 and tenant_uuid = $3
+					returning uuid
+				`, activeStatusUUID, instanceEntityUUID, tenantUUID).Scan(instanceEntityUUID)
+				if errors.Is(err, pgx.ErrNoRows) {
+					return false, errors.New("cancel class target not found")
+				}
+				if err != nil {
+					return false, fmt.Errorf("canceled approval class: %w", err)
+				}
+				entityUUID = instanceEntityUUID
+			}
+		default:
+			return false, fmt.Errorf("unsupported approved entity/action: %s/%s", entityType, instanceAction)
 		}
 
 		statusCandidates := []string{command}

@@ -10,7 +10,8 @@
             "request": "launch",
             "mode": "auto",
             "program": "${workspaceRoot}",
-            "envFile": "${workspaceFolder}/.env"
+            "envFile": "${workspaceFolder}/.env",
+            "output": "${workspaceFolder}/.debug/gakuren-debug.exe"
         }
     ]
 }

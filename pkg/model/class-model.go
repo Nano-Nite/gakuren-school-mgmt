@@ -32,6 +32,7 @@ type UpdateClassModel struct {
 	AbbrName        *string    `json:"abbr_name,omitempty"`
 	Level           int        `json:"level"`
 	HomeroomTeacher *uuid.UUID `json:"homeroom_teacher,omitempty"`
+	Status          string     `json:"status,omitempty"`
 }
 
 type DeleteClassModel struct {
