@@ -1,7 +1,6 @@
 package helper
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"strconv"
@@ -81,14 +80,12 @@ func SoftDeleteClass(classUUID, tenantUUID uuid.UUID) error {
 }
 
 func InsertClass(data model.ClassModel) error {
-	tx, err := db.Conn.Begin(db.DBCtx)
-	if err != nil {
-		return err
-	}
-	defer tx.Rollback(context.Background())
-
-	query := `SELECT * FROM school_sch.class WHERE lower(name) = lower($1) or lower(abbr_name) = lower($2) LIMIT 1`
-	selectedClass, err := db.GetSingleDataByQuery[model.ClassModel](query, data.Name, data.AbbrName)
+	query := `select uuid, name, abbr_name, level, homeroom_teacher, status_uuid,
+		created_date, updated_date, tenant_uuid
+		from school_sch.class
+		where tenant_uuid = $3 and (lower(name) = lower($1)
+			or ($2::text is not null and lower(abbr_name) = lower($2))) limit 1`
+	selectedClass, err := db.GetSingleDataByQuery[model.ClassModel](query, data.Name, data.AbbrName, data.TenantUUID)
 	if err != nil {
 		if err.Error() != "no rows in result set" {
 			return err
@@ -100,14 +97,14 @@ func InsertClass(data model.ClassModel) error {
 	}
 
 	query = `INSERT INTO school_sch.class (name, abbr_name, level, homeroom_teacher,status_uuid, created_date, updated_date, tenant_uuid) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`
-	_, err = db.InsertReturnUUID(query, data.Name, data.AbbrName, data.Level, data.HomeroomTeacher, data.StatusUUID, data.CreatedDate, data.UpdatedDate, data.TenantUUID)
+	_, err = db.Conn.Exec(db.DBCtx, query, data.Name, data.AbbrName, data.Level, data.HomeroomTeacher, data.StatusUUID, data.CreatedDate, data.UpdatedDate, data.TenantUUID)
 	if err != nil {
 		if err.Error() != "no rows in result set" {
 			return err
 		}
 	}
 
-	return tx.Commit(db.DBCtx)
+	return nil
 }
 
 func SearchClass(tenantUUID string, payload model.SearchPayload) ([]model.ReadClassModelResult, *model.DataStatistics, error) {
@@ -136,11 +133,11 @@ func SearchClass(tenantUUID string, payload model.SearchPayload) ([]model.ReadCl
 
 	//* build query by payload data
 	// search
-	queryBuilder += `(lower(name) LIKE $` + strconv.Itoa(len(param)+1) +
-		` or lower(abbr_name) LIKE $` + strconv.Itoa(len(param)+1) +
-		` or lower(homeroom_teacher) LIKE $` + strconv.Itoa(len(param)+1) +
-		` or level::text LIKE $` + strconv.Itoa(len(param)+1) +
-		` or total_student::text LIKE $` + strconv.Itoa(len(param)+1) +
+	queryBuilder += `(lower(name) LIKE lower($` + strconv.Itoa(len(param)+1) + `) ` +
+		` or lower(abbr_name) LIKE lower($` + strconv.Itoa(len(param)+1) + `) ` +
+		` or lower(homeroom_teacher) LIKE lower($` + strconv.Itoa(len(param)+1) + `) ` +
+		` or level::text LIKE lower($` + strconv.Itoa(len(param)+1) + `) ` +
+		` or total_student::text LIKE lower($` + strconv.Itoa(len(param)+1) + `) ` +
 		`)`
 	if payload.Search != nil && len(*payload.Search) > 0 {
 		param = append(param, "%"+*payload.Search+"%")

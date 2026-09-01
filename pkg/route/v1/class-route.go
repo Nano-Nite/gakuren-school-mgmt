@@ -13,8 +13,10 @@ import (
 )
 
 func SetupClassRoute(app *fiber.App, API_VERSION string) {
+	classBaseURL := API_VERSION + "/school/class"
+
 	// create
-	app.Post(API_VERSION+"/school/class/create", func(c fiber.Ctx) error {
+	app.Post(classBaseURL+"/create", func(c fiber.Ctx) error {
 		payload := new(model.CreateClassModel)
 		tenantUUIDHeader := c.Get("tenant_uuid")
 		authHeader := c.Get("Authorization")
@@ -110,7 +112,6 @@ func SetupClassRoute(app *fiber.App, API_VERSION string) {
 				instance.ApprovalWorkflowUUID = selectedWorkflow.UUID
 				instance.TenantUUID = tenantUUID
 				instance.EntityType = helper.CLASS_ENTITY_TYPE
-				instance.EntityType = helper.CLASS_ENTITY_TYPE
 				instance.EntityUUID = nil
 				instance.ActionCode = helper.ACTION_CODE_CREATE
 				instance.RequestData = json.RawMessage(payloadJson)
@@ -147,7 +148,7 @@ func SetupClassRoute(app *fiber.App, API_VERSION string) {
 	})
 
 	// update
-	app.Patch(API_VERSION+"/school/class/update", func(c fiber.Ctx) error {
+	app.Patch(classBaseURL+"/update", func(c fiber.Ctx) error {
 		payload := new(model.UpdateClassModel)
 		tenantUUID, userUUID, err := validateClassRequest(c)
 		if err != nil {
@@ -221,7 +222,7 @@ func SetupClassRoute(app *fiber.App, API_VERSION string) {
 	})
 
 	// delete
-	app.Delete(API_VERSION+"/school/class/delete", func(c fiber.Ctx) error {
+	app.Delete(classBaseURL+"/delete", func(c fiber.Ctx) error {
 		payload := new(model.DeleteClassModel)
 		tenantUUID, userUUID, err := validateClassRequest(c)
 		if err != nil {
@@ -281,7 +282,7 @@ func SetupClassRoute(app *fiber.App, API_VERSION string) {
 	})
 
 	// get
-	app.Post(API_VERSION+"/school/class/get", func(c fiber.Ctx) error {
+	app.Post(classBaseURL+"/get", func(c fiber.Ctx) error {
 		payload := new(model.SearchPayload)
 		tenantUUID := c.Get("tenant_uuid")
 		//* validate body

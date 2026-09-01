@@ -17,6 +17,7 @@ const APPROVAL_DOCUMENT_CODE = "APR"
 
 // ENTITY TYPE
 const CLASS_ENTITY_TYPE = "CLASS"
+const USER_ENTITY_TYPE = "USER"
 
 // MODULE CODE
 const CLASS_MODULE_CODE = "KLS"
@@ -46,6 +47,11 @@ const APPROVAL_BYPASS = "appr.bypass"
 const CREATE_CLASS_PERMISSION = "class.create"
 const UPDATE_CLASS_PERMISSION = "class.update"
 const DELETE_CLASS_PERMISSION = "class.delete"
+
+// USER PERMISSION
+const CREATE_USER_PERMISSION = "user.create"
+const UPDATE_USER_PERMISSION = "user.update"
+const DELETE_USER_PERMISSION = "user.delete"
 
 // const SUBMIT_CLASS_PERMISSION = "class.submit"
 // const APPROVE_CLASS_PERMISSION = "class.approve"

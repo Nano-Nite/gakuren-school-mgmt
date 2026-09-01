@@ -1,6 +1,7 @@
 package db
 
 import (
+	"context"
 	"log"
 
 	"github.com/google/uuid"
@@ -39,7 +40,7 @@ func GetMultipleDataByQuery[T any](query string, param ...interface{}) (*[]T, er
 	return &result, nil
 }
 
-func ExecuteQuery(query string, param ...interface{}) error {
+func ExecuteQuery(ctx context.Context, query string, param ...interface{}) error {
 	_, err := Conn.Exec(DBCtx, query, param...)
 	if err != nil {
 		if err.Error() != "no rows in result set" {

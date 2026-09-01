@@ -49,3 +49,10 @@ type ExecuteApprovalPayload struct {
 	Command string `db:"command" json:"command"`
 	Note    string `db:"note" json:"note"`
 }
+
+type ReadGenderResult struct {
+	UUID     uuid.UUID `db:"uuid" json:"uuid"`
+	Name     string    `db:"name" json:"name"`
+	AbbrName *string   `db:"abbr_name" json:"abbr_name"`
+	Status   string    `db:"status" json:"status"`
+}
