@@ -239,13 +239,13 @@ func ExecuteApproval(instanceUUID, tenantUUID string, actedBy, roleUUID uuid.UUI
 					return false, errors.New("class delete approval is missing entity UUID")
 				}
 
-				var inactiveStatusUUID uuid.UUID
+				var deleteStatusUUID uuid.UUID
 				err = tx.QueryRow(db.DBCtx, `
 					select uuid
 					from public.status
 					where lower(name) = lower($1)
 					limit 1
-				`, STATUS_INACTIVE).Scan(&inactiveStatusUUID)
+				`, STATUS_DELETE).Scan(&deleteStatusUUID)
 				if errors.Is(err, pgx.ErrNoRows) {
 					return false, errors.New("inactive status is not configured")
 				}
@@ -258,7 +258,7 @@ func ExecuteApproval(instanceUUID, tenantUUID string, actedBy, roleUUID uuid.UUI
 					set status_uuid = $1, updated_date = now()
 					where uuid = $2 and tenant_uuid = $3
 					returning uuid
-				`, inactiveStatusUUID, instanceEntityUUID, tenantUUID).Scan(instanceEntityUUID)
+				`, deleteStatusUUID, instanceEntityUUID, tenantUUID).Scan(instanceEntityUUID)
 				if errors.Is(err, pgx.ErrNoRows) {
 					return false, errors.New("approved class delete target not found")
 				}
