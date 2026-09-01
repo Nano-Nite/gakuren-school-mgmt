@@ -122,7 +122,7 @@ func SetupClassRoute(app *fiber.App, API_VERSION string) {
 				instance.UpdatedDate = nil
 
 				// insert approval instance
-				instanceUUID, err := helper.CreateApprovalInstance(instance)
+				instanceUUID, err := helper.CreateApprovalInstance(instance, helper.CLASS_MODULE_CODE)
 				if err != nil {
 					return helper.ReturnResponse(c, fiber.StatusInternalServerError, "Internal server error, try again in a while", nil, err)
 				}
@@ -360,7 +360,7 @@ func createClassApproval(
 		RequestData:          json.RawMessage(payloadJSON),
 		StatusUUID:           statusUUID,
 		RequestedBy:          userUUID,
-	})
+	}, helper.CLASS_MODULE_CODE)
 	if err != nil {
 		return nil, err
 	}

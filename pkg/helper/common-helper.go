@@ -221,7 +221,7 @@ func ConvertModelToJSON(data any) (string, error) {
 	return string(jsonBytes), nil
 }
 
-func CreateApprovalInstance(instance model.ApprovalInstance) (*uuid.UUID, error) {
+func CreateApprovalInstance(instance model.ApprovalInstance, modul string) (*uuid.UUID, error) {
 	tx, err := db.Conn.Begin(db.DBCtx)
 	if err != nil {
 		return nil, err
@@ -262,7 +262,7 @@ func CreateApprovalInstance(instance model.ApprovalInstance) (*uuid.UUID, error)
 	ticketNumber, err := GenerateTicketNumber(
 		nextSequence,
 		APPROVAL_DOCUMENT_CODE,
-		CLASS_MODULE_CODE,
+		modul,
 		institutionCode,
 		requestDate,
 	)

@@ -314,7 +314,7 @@ func createStudentApproval(workflow model.ApprovalWorkflow, tenantUUID, userUUID
 	if err != nil {
 		return nil, err
 	}
-	id, err := helper.CreateApprovalInstance(model.ApprovalInstance{ApprovalWorkflowUUID: workflow.UUID, TenantUUID: tenantUUID, EntityType: helper.STUDENT_ENTITY_TYPE, EntityUUID: entityUUID, ActionCode: action, RequestData: json.RawMessage(b), StatusUUID: helper.DB_UUID_STATUS_ACTIVE, RequestedBy: userUUID})
+	id, err := helper.CreateApprovalInstance(model.ApprovalInstance{ApprovalWorkflowUUID: workflow.UUID, TenantUUID: tenantUUID, EntityType: helper.STUDENT_ENTITY_TYPE, EntityUUID: entityUUID, ActionCode: action, RequestData: json.RawMessage(b), StatusUUID: helper.DB_UUID_STATUS_ACTIVE, RequestedBy: userUUID}, helper.STUDENT_MODULE_CODE)
 	if err != nil {
 		return nil, err
 	}
