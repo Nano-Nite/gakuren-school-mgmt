@@ -10,9 +10,9 @@ import (
 )
 
 func SetupMiscRoute(app *fiber.App, apiVersion string) {
-	studenBaseURL := apiVersion + "/misc"
+	miscBaseURL := apiVersion + "/school/misc"
 
-	app.Post(studenBaseURL+"/gender", func(c fiber.Ctx) error {
+	app.Post(miscBaseURL+"/gender", func(c fiber.Ctx) error {
 		payload := new(model.SearchPayload)
 		tenantUUID, _, err := validateMiscRequest(c)
 		if err != nil {
