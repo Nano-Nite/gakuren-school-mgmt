@@ -1,8 +1,10 @@
 package helper
 
 import (
+	"context"
 	"errors"
 	"fmt"
+	"log"
 	"strconv"
 	"strings"
 
@@ -17,6 +19,37 @@ func GetTenantStudent(userUUID, tenantUUID uuid.UUID) (*model.UserModel, error) 
 		select uuid, tenant_uuid, name, email, phone, address, img_location,
 		       role_uuid, status_uuid, created_date, updated_date, version
 		from user_sch."user" where uuid = $1 and tenant_uuid = $2
+	`, userUUID, tenantUUID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, errors.New("user not found")
+	}
+	return data, err
+}
+
+func GetStudent(userUUID, tenantUUID uuid.UUID) (*model.StudentModel, error) {
+	data, err := db.GetSingleDataByQuery[model.StudentModel](`
+		select
+			s."uuid"
+			,s.user_uuid 
+			,u."name"
+			,s.nis 
+			,s.nisn 
+			,c.uuid class_uuid
+			,u.phone 
+			,u.email
+			,g.uuid gender_uuid
+			,s2.uuid status_uuid
+			,u.address
+			,s.parent_name 
+			,s.parent_email 
+			,s.parent_phone 
+			,s.parent_address 
+		from school_sch.student s 
+		join user_sch."user" u on s.user_uuid = u."uuid" 
+		left join school_sch."class" c on s.class_uuid = c."uuid" 
+		join public.gender g on s.gender_uuid = g."uuid" 
+		join public.status s2 on s.status_uuid = s2."uuid" 
+		where s.uuid = $1 and u.tenant_uuid = $2
 	`, userUUID, tenantUUID)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, errors.New("user not found")
@@ -58,39 +91,73 @@ func InsertStudent(data model.CreateStudentModel, userUUID, status uuid.UUID) (*
 	return &id, nil
 }
 
-func UpdateStudent(data model.UserModel) error {
-	result, err := db.Conn.Exec(db.DBCtx, `
-		update user_sch."user"
-		set name=$1, email=$2, phone=$3, address=$4, img_location=$5,
-		    role_uuid=$6, version=$7, updated_date=now()
-		where uuid=$8 and tenant_uuid=$9
-	`, data.Name, data.Email, data.Phone, data.Address, data.ImgLocation,
-		data.RoleUUID, data.Version, data.UUID, data.TenantUUID)
+func UpdateStudent(data model.StudentModel) error {
+	tx, err := db.Conn.Begin(db.DBCtx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(context.Background())
+
+	resultUpdateUser, err := tx.Exec(db.DBCtx, `
+		update user_sch.user
+			set name=$1, email=$2, phone=$3, address=$4, updated_date=now()
+		where uuid=$5
+	`, data.Name, data.Email, data.Phone, data.Address, data.UserUUID)
 	if err != nil {
 		return fmt.Errorf("update user: %w", err)
 	}
-	if result.RowsAffected() == 0 {
+	if resultUpdateUser.RowsAffected() == 0 {
 		return errors.New("user not found")
 	}
-	return nil
+	resultUpdateStudent, err := tx.Exec(db.DBCtx, `
+		update school_sch.student
+			set gender_uuid=$1, class_uuid=$2, nis=$3, nisn=$4, status_uuid=$5, updated_date = now(),
+			parent_name = $6, parent_email = $7, parent_phone = $8, parent_address = $9
+		where uuid=$10
+	`, data.GenderUUID, data.ClassUUID, data.NIS, data.NISN, data.StatusUUID,
+		data.ParentName, data.ParentEmail, data.ParentPhone, data.ParentAddress, data.UUID)
+	if err != nil {
+		return fmt.Errorf("update user: %w", err)
+	}
+	if resultUpdateStudent.RowsAffected() == 0 {
+		return errors.New("user not found")
+	}
+	return tx.Commit(db.DBCtx)
 }
 
-func UpdateStudentStatus(userUUID, tenantUUID, statusUUID uuid.UUID) error {
-	result, err := db.Conn.Exec(db.DBCtx, `
-		update user_sch."user" set status_uuid=$1, updated_date=now()
-		where uuid=$2 and tenant_uuid=$3
-	`, statusUUID, userUUID, tenantUUID)
+func UpdateStudentStatus(data model.StudentModel, tenantUUID, statusUUID uuid.UUID) error {
+	tx, err := db.Conn.Begin(db.DBCtx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(context.Background())
+
+	//! we will think about it later, do we need to make user disabled too or not.
+	//! when user inactive during pending student status, they probably cannot login
+	// result1, err := tx.Exec(db.DBCtx, `
+	// 	update user_sch."user" set status_uuid=$1, updated_date=now() where uuid=$2 and tenant_uuid=$3
+	// `, statusUUID, data.UserUUID, tenantUUID)
+	// if err != nil {
+	// 	return fmt.Errorf("update user status: %w", err)
+	// }
+	// if result1.RowsAffected() == 0 {
+	// 	return errors.New("user not found")
+	// }
+
+	result2, err := tx.Exec(db.DBCtx, `
+		update school_sch.student set status_uuid=$1, updated_date=now() where uuid=$2
+	`, statusUUID, data.UUID)
 	if err != nil {
 		return fmt.Errorf("update user status: %w", err)
 	}
-	if result.RowsAffected() == 0 {
+	if result2.RowsAffected() == 0 {
 		return errors.New("user not found")
 	}
-	return nil
+	return tx.Commit(db.DBCtx)
 }
 
-func SoftDeleteStudent(userUUID, tenantUUID uuid.UUID) error {
-	return UpdateStudentStatus(userUUID, tenantUUID, DB_UUID_STATUS_INACTIVE)
+func SoftDeleteStudent(data model.StudentModel, tenantUUID uuid.UUID) error {
+	return UpdateStudentStatus(data, tenantUUID, DB_UUID_STATUS_INACTIVE)
 }
 
 func SearchStudent(tenantUUID uuid.UUID, payload model.SearchPayload) ([]model.ReadStudentModelResult, *model.DataStatistics, error) {
@@ -126,18 +193,23 @@ func SearchStudent(tenantUUID uuid.UUID, payload model.SearchPayload) ([]model.R
 	}
 	params = append(params, "%"+search+"%")
 	where := `(lower(coalesce(name,'')) like $2 or lower(coalesce(email,'')) like $2
-		or lower(coalesce(phone,'')) like $2 or lower(coalesce(nis,'')) like $2)
-		or lower(coalesce(nisn,'')) like $2`
+		or lower(coalesce(phone,'')) like $2 or lower(coalesce(nis,'')) like $2
+		or lower(coalesce(nisn,'')) like $2 )`
 	if payload.Filter != nil {
 		if status, ok := (*payload.Filter)["status"].(string); ok && status != "" {
 			params = append(params, status)
 			where += " and lower(status)=lower($" + strconv.Itoa(len(params)) + ")"
 		}
+
 		if id, ok := (*payload.Filter)["uuid"].(string); ok && id != "" {
 			params = append(params, id)
 			where += " and uuid=$" + strconv.Itoa(len(params))
 		}
 	}
+
+	params = append(params, STATUS_DELETE)
+	where += " and lower(status) != lower($" + strconv.Itoa(len(params)) + ")"
+
 	count, err := db.GetSingleDataByQuery[model.CountResult](base+" select count(*) from datas where "+where, params...)
 	if err != nil {
 		return nil, nil, err
@@ -169,6 +241,10 @@ func SearchStudent(tenantUUID uuid.UUID, payload model.SearchPayload) ([]model.R
 	if err != nil {
 		return nil, nil, err
 	}
+
+	log.Println(query)
+	log.Println(params...)
+
 	stats := CalculateDataStatisticResult(count, payload, len(*rows))
 	return *rows, &stats, nil
 }

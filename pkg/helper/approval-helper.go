@@ -268,60 +268,112 @@ func ExecuteApproval(instanceUUID, tenantUUID string, actedBy, roleUUID uuid.UUI
 				entityUUID = instanceEntityUUID
 
 			//* Student CRUD
+			// create
 			case strings.EqualFold(entityType, STUDENT_ENTITY_TYPE) && strings.EqualFold(instanceAction, ACTION_CODE_CREATE):
-				var userData model.UserModel
-				if err = json.Unmarshal(requestData, &userData); err != nil {
+				var studenData model.CreateStudentModel
+				if err = json.Unmarshal(requestData, &studenData); err != nil {
 					return false, fmt.Errorf("decode user approval request: %w", err)
 				}
-				userData.TenantUUID, err = uuid.Parse(tenantUUID)
+				parsedTenantUUID, err := uuid.Parse(tenantUUID)
 				if err != nil {
 					return false, fmt.Errorf("invalid tenant UUID: %w", err)
 				}
-				var createdUUID uuid.UUID
-				err = tx.QueryRow(db.DBCtx, `
-					insert into user_sch."user"
-						(tenant_uuid,name,email,phone,address,img_location,role_uuid,status_uuid,created_date,updated_date,version)
-					values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) returning uuid
-				`, userData.TenantUUID, userData.Name, userData.Email, userData.Phone, userData.Address,
-					userData.ImgLocation, userData.RoleUUID, userData.StatusUUID, userData.CreatedDate, userData.UpdatedDate, userData.Version).Scan(&createdUUID)
+				studentRole, err := GetRoleByAbbrName(ROLE_STUDENT)
 				if err != nil {
-					return false, fmt.Errorf("create approved user: %w", err)
+					return false, fmt.Errorf("role not found: %w", err)
 				}
-				entityUUID = &createdUUID
 
+				userData := model.UserModel{
+					TenantUUID: parsedTenantUUID,
+					Name:       studenData.Name,
+					Email:      studenData.Email,
+					Phone:      studenData.Phone,
+					Address:    studenData.Address,
+					RoleUUID:   studentRole.UUID,
+					StatusUUID: DB_UUID_STATUS_ACTIVE,
+				}
+
+				id, insertErr := InsertUserStudent(userData)
+				if insertErr != nil {
+					return false, nil
+				}
+
+				createUUID, err := InsertStudent(studenData, *id, DB_UUID_STATUS_ACTIVE)
+				if err != nil {
+					return false, nil
+				}
+
+				entityUUID = createUUID
+			//update
 			case strings.EqualFold(entityType, STUDENT_ENTITY_TYPE) && strings.EqualFold(instanceAction, ACTION_CODE_UPDATE):
 				if instanceEntityUUID == nil {
 					return false, errors.New("user update approval is missing entity UUID")
 				}
-				var userData model.UserModel
+				var userData model.StudentModel
 				if err = json.Unmarshal(requestData, &userData); err != nil {
 					return false, fmt.Errorf("decode user approval request: %w", err)
 				}
+
+				// update user tabel first
 				err = tx.QueryRow(db.DBCtx, `
-					update user_sch."user" set name=$1,email=$2,phone=$3,address=$4,img_location=$5,
-					role_uuid=$6,version=$7,status_uuid=$8,updated_date=now()
-					where uuid=$9 and tenant_uuid=$10 returning uuid
-				`, userData.Name, userData.Email, userData.Phone, userData.Address, userData.ImgLocation,
-					userData.RoleUUID, userData.Version, DB_UUID_STATUS_ACTIVE, instanceEntityUUID, tenantUUID).Scan(instanceEntityUUID)
+					update user_sch."user" set 
+						name=$1 ,email=$2, phone=$3, address=$4, updated_date=now()
+					where uuid=$5 and tenant_uuid=$6 returning uuid
+				`, userData.Name, userData.Email, userData.Phone, userData.Address, userData.UserUUID, tenantUUID).Scan(instanceEntityUUID)
 				if errors.Is(err, pgx.ErrNoRows) {
 					return false, errors.New("approved user update target not found")
 				}
 				if err != nil {
 					return false, fmt.Errorf("update approved user: %w", err)
 				}
-				entityUUID = instanceEntityUUID
 
-			case strings.EqualFold(entityType, STUDENT_ENTITY_TYPE) && strings.EqualFold(instanceAction, ACTION_CODE_DELETE):
-				if instanceEntityUUID == nil {
-					return false, errors.New("user delete approval is missing entity UUID")
-				}
-				err = tx.QueryRow(db.DBCtx, `update user_sch."user" set status_uuid=$1,updated_date=now()
-					where uuid=$2 and tenant_uuid=$3 returning uuid`, DB_UUID_STATUS_INACTIVE, instanceEntityUUID, tenantUUID).Scan(instanceEntityUUID)
+				// then update student table
+				err = tx.QueryRow(db.DBCtx, `
+					update school_sch.student set 
+						gender_uuid=$1, class_uuid=$2, nis=$3, nisn=$4, status_uuid =$5, updated_date=now()
+					where uuid=$6 returning uuid
+				`, userData.GenderUUID, userData.ClassUUID, userData.NIS, userData.NISN, userData.StatusUUID, userData.UUID).Scan(instanceEntityUUID)
 				if errors.Is(err, pgx.ErrNoRows) {
-					return false, errors.New("approved user delete target not found")
+					return false, errors.New("approved student update target not found")
 				}
 				if err != nil {
-					return false, fmt.Errorf("soft-delete approved user: %w", err)
+					return false, fmt.Errorf("update approved user: %w", err)
+				}
+
+				entityUUID = instanceEntityUUID
+			// delete
+			case strings.EqualFold(entityType, STUDENT_ENTITY_TYPE) && strings.EqualFold(instanceAction, ACTION_CODE_DELETE):
+				if instanceEntityUUID == nil {
+					return false, errors.New("student delete approval is missing entity UUID")
+				}
+				var userData model.StudentModel
+				if err = json.Unmarshal(requestData, &userData); err != nil {
+					return false, fmt.Errorf("decode user approval request: %w", err)
+				}
+				// update user tabel first
+				err = tx.QueryRow(db.DBCtx, `
+					update user_sch."user" set 
+						status_uuid=$1, updated_date=now()
+					where uuid=$2 and tenant_uuid=$3 returning uuid
+				`, DB_UUID_STATUS_DELETE, userData.UserUUID, tenantUUID).Scan(instanceEntityUUID)
+				if errors.Is(err, pgx.ErrNoRows) {
+					return false, errors.New("approved user update target not found")
+				}
+				if err != nil {
+					return false, fmt.Errorf("update approved student: %w", err)
+				}
+
+				// then update student table
+				err = tx.QueryRow(db.DBCtx, `
+					update school_sch.student set 
+						status_uuid =$1, updated_date=now()
+					where uuid=$2 returning uuid
+				`, DB_UUID_STATUS_DELETE, userData.UUID).Scan(instanceEntityUUID)
+				if errors.Is(err, pgx.ErrNoRows) {
+					return false, errors.New("approved student delete target not found")
+				}
+				if err != nil {
+					return false, fmt.Errorf("delete approved user: %w", err)
 				}
 				entityUUID = instanceEntityUUID
 
@@ -369,8 +421,8 @@ func ExecuteApproval(instanceUUID, tenantUUID string, actedBy, roleUUID uuid.UUI
 				if instanceEntityUUID == nil {
 					break
 				}
-				err = tx.QueryRow(db.DBCtx, `update user_sch."user" set status_uuid=$1,updated_date=now()
-					where uuid=$2 and tenant_uuid=$3 returning uuid`, DB_UUID_STATUS_ACTIVE, instanceEntityUUID, tenantUUID).Scan(instanceEntityUUID)
+				err = tx.QueryRow(db.DBCtx, `update school_sch.student set status_uuid=$1,updated_date=now()
+					where uuid=$2 returning uuid`, DB_UUID_STATUS_ACTIVE, instanceEntityUUID).Scan(instanceEntityUUID)
 				if errors.Is(err, pgx.ErrNoRows) {
 					return false, errors.New("cancel user target not found")
 				}

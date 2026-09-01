@@ -120,11 +120,13 @@ func SearchClass(tenantUUID string, payload model.SearchPayload) ([]model.ReadCl
 			c.level,
 			u.name as homeroom_teacher,
 			s.name as status,
-			0 as total_student
+			count(st.uuid) as total_student
 		from school_sch.class c
 		left join user_sch.user u on c.homeroom_teacher = u.uuid
 		left join public.status s on c.status_uuid = s.uuid
+		left join school_sch.student st on c."uuid" = st.class_uuid 
 		where c.tenant_uuid = $1
+		group by c.uuid, c.name, c.abbr_name, c.level, u.name, s.name
 	)
 	`
 
@@ -156,6 +158,9 @@ func SearchClass(tenantUUID string, payload model.SearchPayload) ([]model.ReadCl
 			param = append(param, (*payload.Filter)["uuid"].(string))
 		}
 	}
+
+	param = append(param, STATUS_DELETE)
+	queryBuilder += " and lower(status) != lower($" + strconv.Itoa(len(param)) + ")"
 
 	// run count first to get data statistic
 	queryCount := query + "SELECT COUNT(*) FROM datas WHERE " + queryBuilder

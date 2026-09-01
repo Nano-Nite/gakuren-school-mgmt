@@ -31,6 +31,7 @@ const DEFAULT_PAGES = 1
 const STATUS_ACTIVE = "Active"
 const STATUS_INACTIVE = "Inactive"
 const STATUS_PENDING = "Pending"
+const STATUS_DELETE = "Delete"
 
 // ACTION CODE
 const ACTION_CODE_CREATE = "CREATE"
@@ -67,6 +68,7 @@ const DELETE_STUDENT_PERMISSION = "student.delete"
 var DB_UUID_STATUS_ACTIVE uuid.UUID
 var DB_UUID_STATUS_PENDING uuid.UUID
 var DB_UUID_STATUS_INACTIVE uuid.UUID
+var DB_UUID_STATUS_DELETE uuid.UUID
 
 // ROLE NAME
 const ROLE_STAFF_TU = "STAFF_TU"
@@ -99,6 +101,12 @@ func InitVariableDB() {
 		log.Fatal("Critical error loading configuration: ", err)
 	} else {
 		DB_UUID_STATUS_INACTIVE = inactiveStatus.UUID
+	}
+	deleteStatus, err := GetStatusByName(STATUS_DELETE)
+	if err != nil {
+		log.Fatal("Critical error loading configuration: ", err)
+	} else {
+		DB_UUID_STATUS_DELETE = deleteStatus.UUID
 	}
 
 	log.Println("Variable Loaded")

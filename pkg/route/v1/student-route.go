@@ -89,39 +89,64 @@ func SetupStudentRoute(app *fiber.App, apiVersion string) {
 
 	app.Patch(studenBaseURL+"/update", func(c fiber.Ctx) error {
 		payload := new(model.UpdateStudentModel)
+
+		// validation header
 		tenantUUID, requesterUUID, err := validateStudentRequest(c)
 		if err != nil {
 			return helper.ReturnResponse(c, fiber.StatusUnauthorized, "Missing or invalid authentication data", nil, err)
 		}
-		if err = c.Bind().Body(payload); err != nil || payload.UUID == uuid.Nil || payload.RoleUUID == uuid.Nil {
-			return helper.ReturnResponse(c, fiber.StatusBadRequest, "Invalid request body, uuid and role_uuid are required", nil, err)
+
+		// body check
+		if err = c.Bind().Body(payload); err != nil || payload.UUID == uuid.Nil {
+			return helper.ReturnResponse(c, fiber.StatusBadRequest, "Invalid request body, uuid is required", nil, err)
 		}
-		if ok, permissionErr := helper.GetUserPermission(requesterUUID.String(), helper.UPDATE_USER_PERMISSION); permissionErr != nil || !ok {
+
+		// permission check
+		if ok, permissionErr := helper.GetUserPermission(requesterUUID.String(), helper.UPDATE_STUDENT_PERMISSION); permissionErr != nil || !ok {
 			return helper.ReturnResponse(c, fiber.StatusUnauthorized, "Access Denied", nil, permissionErr)
 		}
-		data, err := helper.GetTenantStudent(payload.UUID, tenantUUID)
+
+		// get data
+		selectedData, err := helper.GetStudent(payload.UUID, tenantUUID)
 		if err != nil {
-			return helper.ReturnResponse(c, fiber.StatusNotFound, "User not found", nil, err)
+			return helper.ReturnResponse(c, fiber.StatusNotFound, "Student not found", nil, err)
 		}
-		if data.StatusUUID != helper.DB_UUID_STATUS_ACTIVE && data.StatusUUID != helper.DB_UUID_STATUS_INACTIVE {
+
+		// pending data check
+		if selectedData.StatusUUID != helper.DB_UUID_STATUS_ACTIVE && selectedData.StatusUUID != helper.DB_UUID_STATUS_INACTIVE {
 			return helper.ReturnResponse(c, fiber.StatusConflict, "Update rejected because user has a pending action", nil, nil)
 		}
-		activate := data.StatusUUID == helper.DB_UUID_STATUS_INACTIVE && strings.EqualFold(payload.Status, helper.STATUS_ACTIVE)
+
+		// activate case
+		activate := selectedData.StatusUUID == helper.DB_UUID_STATUS_INACTIVE && strings.EqualFold(payload.Status.String(), helper.DB_UUID_STATUS_ACTIVE.String())
 		if activate {
-			data.StatusUUID = helper.DB_UUID_STATUS_ACTIVE
+			selectedData.StatusUUID = helper.DB_UUID_STATUS_ACTIVE
 		} else {
-			data.Name, data.Email, data.Phone, data.Address = payload.Name, payload.Email, payload.Phone, payload.Address
-			data.ImgLocation, data.RoleUUID, data.Version = payload.ImgLocation, payload.RoleUUID, payload.Version
+			selectedData.UUID = payload.UUID
+			selectedData.Name = payload.Name
+			selectedData.NIS = payload.NIS
+			selectedData.NISN = payload.NISN
+			selectedData.Phone = payload.Phone
+			selectedData.Email = payload.Email
+			selectedData.ClassUUID = payload.ClassUUID
+			selectedData.Address = payload.Address
+			selectedData.GenderUUID = payload.GenderUUID
+			selectedData.ParentName = payload.ParentName
+			selectedData.ParentEmail = payload.ParentEmail
+			selectedData.ParentPhone = payload.ParentPhone
+			selectedData.ParentAddress = payload.ParentAddress
 		}
+
+		// bypass permission check
 		canBypass, err := approvalBypass(requesterUUID)
 		if err != nil {
 			return helper.ReturnResponse(c, fiber.StatusInternalServerError, "Failed to check approval bypass", nil, err)
 		}
 		operation := func() error {
 			if activate {
-				return helper.UpdateStudentStatus(data.UUID, tenantUUID, data.StatusUUID)
+				return helper.UpdateStudentStatus(*selectedData, tenantUUID, payload.Status)
 			}
-			return helper.UpdateStudent(*data)
+			return helper.UpdateStudent(*selectedData)
 		}
 		if canBypass {
 			if err = operation(); err != nil {
@@ -129,7 +154,9 @@ func SetupStudentRoute(app *fiber.App, apiVersion string) {
 			}
 			return helper.ReturnResponse(c, fiber.StatusOK, "success", payload, nil)
 		}
-		workflow, err := determineStudentWorkflow(tenantUUID, requesterUUID, helper.UPDATE_USER_PERMISSION, helper.ACTION_CODE_UPDATE)
+
+		// workflow check
+		workflow, err := determineStudentWorkflow(tenantUUID, requesterUUID, helper.UPDATE_STUDENT_PERMISSION, helper.ACTION_CODE_UPDATE)
 		if err != nil {
 			return helper.ReturnResponse(c, fiber.StatusInternalServerError, "Failed to determine approval workflow", nil, err)
 		}
@@ -139,11 +166,15 @@ func SetupStudentRoute(app *fiber.App, apiVersion string) {
 			}
 			return helper.ReturnResponse(c, fiber.StatusOK, "success", payload, nil)
 		}
-		approvalUUID, err := createStudentApproval(*workflow, tenantUUID, requesterUUID, &payload.UUID, helper.ACTION_CODE_UPDATE, data)
+
+		// create approval
+		approvalUUID, err := createStudentApproval(*workflow, tenantUUID, requesterUUID, &payload.UUID, helper.ACTION_CODE_UPDATE, selectedData)
 		if err != nil {
 			return helper.ReturnResponse(c, fiber.StatusInternalServerError, "Failed to create user update approval", nil, err)
 		}
-		if err = helper.UpdateStudentStatus(payload.UUID, tenantUUID, helper.DB_UUID_STATUS_PENDING); err != nil {
+
+		// update studen status to Pending
+		if err = helper.UpdateStudentStatus(*selectedData, tenantUUID, helper.DB_UUID_STATUS_PENDING); err != nil {
 			return helper.ReturnResponse(c, fiber.StatusInternalServerError, "Failed to mark user pending", nil, err)
 		}
 		return helper.ReturnResponse(c, fiber.StatusOK, "success", map[string]any{"uuid": payload.UUID, "approval_uuid": approvalUUID}, nil)
@@ -151,35 +182,49 @@ func SetupStudentRoute(app *fiber.App, apiVersion string) {
 
 	app.Delete(studenBaseURL+"/delete", func(c fiber.Ctx) error {
 		payload := new(model.DeleteStudentModel)
+
+		// validation header
 		tenantUUID, requesterUUID, err := validateStudentRequest(c)
 		if err != nil {
 			return helper.ReturnResponse(c, fiber.StatusUnauthorized, "Missing or invalid authentication data", nil, err)
 		}
+
+		// body check
 		if err = c.Bind().Body(payload); err != nil || payload.UUID == uuid.Nil {
 			return helper.ReturnResponse(c, fiber.StatusBadRequest, "Invalid request body", nil, err)
 		}
-		if ok, permissionErr := helper.GetUserPermission(requesterUUID.String(), helper.DELETE_USER_PERMISSION); permissionErr != nil || !ok {
+
+		// permission check
+		if ok, permissionErr := helper.GetUserPermission(requesterUUID.String(), helper.DELETE_STUDENT_PERMISSION); permissionErr != nil || !ok {
 			return helper.ReturnResponse(c, fiber.StatusUnauthorized, "Access Denied", nil, permissionErr)
 		}
-		data, err := helper.GetTenantStudent(payload.UUID, tenantUUID)
+
+		// get data
+		selectedData, err := helper.GetStudent(payload.UUID, tenantUUID)
 		if err != nil {
-			return helper.ReturnResponse(c, fiber.StatusNotFound, "User not found", nil, err)
+			return helper.ReturnResponse(c, fiber.StatusNotFound, "Student not found", nil, err)
 		}
-		if data.StatusUUID != helper.DB_UUID_STATUS_ACTIVE {
+
+		// status validation
+		if selectedData.StatusUUID != helper.DB_UUID_STATUS_ACTIVE {
 			return helper.ReturnResponse(c, fiber.StatusConflict, "Delete rejected because user is not active", nil, nil)
 		}
+
+		// bypass check
 		canBypass, err := approvalBypass(requesterUUID)
 		if err != nil {
 			return helper.ReturnResponse(c, fiber.StatusInternalServerError, "Failed to check approval bypass", nil, err)
 		}
-		operation := func() error { return helper.SoftDeleteStudent(payload.UUID, tenantUUID) }
+		operation := func() error { return helper.SoftDeleteStudent(*selectedData, tenantUUID) }
+
 		if canBypass {
 			if err = operation(); err != nil {
 				return helper.ReturnResponse(c, fiber.StatusInternalServerError, "Failed to delete user", nil, err)
 			}
 			return helper.ReturnResponse(c, fiber.StatusOK, "success", payload, nil)
 		}
-		workflow, err := determineStudentWorkflow(tenantUUID, requesterUUID, helper.DELETE_USER_PERMISSION, helper.ACTION_CODE_DELETE)
+
+		workflow, err := determineStudentWorkflow(tenantUUID, requesterUUID, helper.DELETE_STUDENT_PERMISSION, helper.ACTION_CODE_DELETE)
 		if err != nil {
 			return helper.ReturnResponse(c, fiber.StatusInternalServerError, "Failed to determine approval workflow", nil, err)
 		}
@@ -189,11 +234,14 @@ func SetupStudentRoute(app *fiber.App, apiVersion string) {
 			}
 			return helper.ReturnResponse(c, fiber.StatusOK, "success", payload, nil)
 		}
-		approvalUUID, err := createStudentApproval(*workflow, tenantUUID, requesterUUID, &payload.UUID, helper.ACTION_CODE_DELETE, data)
+
+		approvalUUID, err := createStudentApproval(*workflow, tenantUUID, requesterUUID, &payload.UUID, helper.ACTION_CODE_DELETE, selectedData)
 		if err != nil {
 			return helper.ReturnResponse(c, fiber.StatusInternalServerError, "Failed to create user delete approval", nil, err)
 		}
-		if err = helper.UpdateStudentStatus(payload.UUID, tenantUUID, helper.DB_UUID_STATUS_PENDING); err != nil {
+
+		// update status to Pending
+		if err = helper.UpdateStudentStatus(*selectedData, tenantUUID, helper.DB_UUID_STATUS_PENDING); err != nil {
 			return helper.ReturnResponse(c, fiber.StatusInternalServerError, "Failed to mark user pending", nil, err)
 		}
 		return helper.ReturnResponse(c, fiber.StatusOK, "success", map[string]any{"uuid": payload.UUID, "approval_uuid": approvalUUID}, nil)
