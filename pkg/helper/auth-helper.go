@@ -139,3 +139,12 @@ func GetRole(uuid string) (*model.RoleModel, error) {
 	}
 	return selectedUser, nil
 }
+
+func GetRoleByAbbrName(abbrName string) (*model.RoleModel, error) {
+	query := `select * from user_sch.role where lower(abbr_name) = lower($1)`
+	selectedUser, err := db.GetSingleDataByQuery[model.RoleModel](query, abbrName)
+	if err != nil {
+		return nil, err
+	}
+	return selectedUser, nil
+}

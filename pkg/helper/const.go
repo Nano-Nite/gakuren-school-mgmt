@@ -18,6 +18,7 @@ const APPROVAL_DOCUMENT_CODE = "APR"
 // ENTITY TYPE
 const CLASS_ENTITY_TYPE = "CLASS"
 const USER_ENTITY_TYPE = "USER"
+const STUDENT_ENTITY_TYPE = "STUDENT"
 
 // MODULE CODE
 const CLASS_MODULE_CODE = "KLS"
@@ -53,6 +54,11 @@ const CREATE_USER_PERMISSION = "user.create"
 const UPDATE_USER_PERMISSION = "user.update"
 const DELETE_USER_PERMISSION = "user.delete"
 
+// STUDENT PERMISSION
+const CREATE_STUDENT_PERMISSION = "student.create"
+const UPDATE_STUDENT_PERMISSION = "student.update"
+const DELETE_STUDENT_PERMISSION = "student.delete"
+
 // const SUBMIT_CLASS_PERMISSION = "class.submit"
 // const APPROVE_CLASS_PERMISSION = "class.approve"
 // const REJECT_CLASS_PERMISSION = "class.reject"
@@ -61,6 +67,13 @@ const DELETE_USER_PERMISSION = "user.delete"
 var DB_UUID_STATUS_ACTIVE uuid.UUID
 var DB_UUID_STATUS_PENDING uuid.UUID
 var DB_UUID_STATUS_INACTIVE uuid.UUID
+
+// ROLE NAME
+const ROLE_STAFF_TU = "STAFF_TU"
+const ROLE_WAKA_KUR = "WAKASEK_KURIKULUM"
+const ROLE_KEPSEK = "KEPALA_SEKOLAH"
+const ROLE_STUDENT = "SISWA"
+const ROLE_TEACHER_AND_STAFF = "GURU_STAFF"
 
 func init() {
 	if API_VERSION == "" {

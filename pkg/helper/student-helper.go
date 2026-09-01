@@ -24,7 +24,7 @@ func GetTenantStudent(userUUID, tenantUUID uuid.UUID) (*model.UserModel, error) 
 	return data, err
 }
 
-func InsertStudent(data model.UserModel) (*uuid.UUID, error) {
+func InsertUserStudent(data model.UserModel) (*uuid.UUID, error) {
 	var id uuid.UUID
 	err := db.Conn.QueryRow(db.DBCtx, `
 		insert into user_sch."user"
@@ -37,6 +37,23 @@ func InsertStudent(data model.UserModel) (*uuid.UUID, error) {
 		data.UpdatedDate, data.Version).Scan(&id)
 	if err != nil {
 		return nil, fmt.Errorf("insert user: %w", err)
+	}
+	return &id, nil
+}
+
+func InsertStudent(data model.CreateStudentModel, userUUID, status uuid.UUID) (*uuid.UUID, error) {
+	var id uuid.UUID
+	err := db.Conn.QueryRow(db.DBCtx, `
+		INSERT INTO school_sch.student
+		(user_uuid, gender_uuid, class_uuid, nis, nisn, status_uuid,
+		parent_name,parent_phone,parent_email,parent_address)
+		VALUES 
+		($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+		returning uuid
+	`, userUUID, data.GenderUUID, data.ClassUUID, data.NIS, data.NISN, status,
+		data.ParentName, data.ParentPhone, data.ParentEmail, data.ParentAddress).Scan(&id)
+	if err != nil {
+		return nil, fmt.Errorf("insert student: %w", err)
 	}
 	return &id, nil
 }
@@ -78,13 +95,30 @@ func SoftDeleteStudent(userUUID, tenantUUID uuid.UUID) error {
 
 func SearchStudent(tenantUUID uuid.UUID, payload model.SearchPayload) ([]model.ReadStudentModelResult, *model.DataStatistics, error) {
 	params := []interface{}{tenantUUID}
-	base := `with datas as (
-		select u.uuid,u.name,u.email,u.phone,u.address,u.img_location,u.role_uuid,
-		       r.name role_name,s.name status,u.version
-		from user_sch."user" u
-		join user_sch.role r on r.uuid=u.role_uuid
-		join public.status s on s.uuid=u.status_uuid
-		where u.tenant_uuid=$1
+	base := `
+	with datas as (
+		select
+			s."uuid"
+			,s.user_uuid 
+			,u."name"
+			,s.nis 
+			,s.nisn 
+			,c."name" class_name
+			,u.phone 
+			,u.email
+			,g."name" gender_name
+			,s2."name" status
+			,u.address
+			,s.parent_name 
+			,s.parent_email 
+			,s.parent_phone 
+			,s.parent_address 
+		from school_sch.student s 
+		join user_sch."user" u on s.user_uuid = u."uuid" 
+		left join school_sch."class" c on s.class_uuid = c."uuid" 
+		join public.gender g on s.gender_uuid = g."uuid" 
+		join public.status s2 on s.status_uuid = s2."uuid" 
+		where u.tenant_uuid = $1
 	)`
 	search := ""
 	if payload.Search != nil {
@@ -92,7 +126,8 @@ func SearchStudent(tenantUUID uuid.UUID, payload model.SearchPayload) ([]model.R
 	}
 	params = append(params, "%"+search+"%")
 	where := `(lower(coalesce(name,'')) like $2 or lower(coalesce(email,'')) like $2
-		or lower(coalesce(phone,'')) like $2 or lower(coalesce(role_name,'')) like $2)`
+		or lower(coalesce(phone,'')) like $2 or lower(coalesce(nis,'')) like $2)
+		or lower(coalesce(nisn,'')) like $2`
 	if payload.Filter != nil {
 		if status, ok := (*payload.Filter)["status"].(string); ok && status != "" {
 			params = append(params, status)
@@ -136,4 +171,30 @@ func SearchStudent(tenantUUID uuid.UUID, payload model.SearchPayload) ([]model.R
 	}
 	stats := CalculateDataStatisticResult(count, payload, len(*rows))
 	return *rows, &stats, nil
+}
+
+func UserStudentValidity(data model.CreateStudentModel) error {
+	checkUser, err := db.GetMultipleDataByQuery[model.UserModel](`
+	with datas as (
+		select 
+			* 
+		from user_sch.user u
+		join school_sch.student s on u.uuid = s.user_uuid 
+	)
+	select email from datas
+	where 
+		lower(email) like lower($1) or 
+		lower(name) like lower($2) or 
+		lower(nis) like lower($3) or 
+		lower(nisn) like lower($4) or 
+		lower(phone) like lower($5)
+	`, "%"+*data.Email+"%", "%"+*data.Name+"%", "%"+*data.NIS+"%", "%"+*data.NISN+"%", "%"+*data.Phone+"%")
+
+	if err != nil {
+		return err
+	}
+	if len(*checkUser) > 0 {
+		return errors.New("Multiple user found")
+	}
+	return nil
 }

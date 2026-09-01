@@ -267,8 +267,8 @@ func ExecuteApproval(instanceUUID, tenantUUID string, actedBy, roleUUID uuid.UUI
 				}
 				entityUUID = instanceEntityUUID
 
-			//* User CRUD
-			case strings.EqualFold(entityType, USER_ENTITY_TYPE) && strings.EqualFold(instanceAction, ACTION_CODE_CREATE):
+			//* Student CRUD
+			case strings.EqualFold(entityType, STUDENT_ENTITY_TYPE) && strings.EqualFold(instanceAction, ACTION_CODE_CREATE):
 				var userData model.UserModel
 				if err = json.Unmarshal(requestData, &userData); err != nil {
 					return false, fmt.Errorf("decode user approval request: %w", err)
@@ -289,7 +289,7 @@ func ExecuteApproval(instanceUUID, tenantUUID string, actedBy, roleUUID uuid.UUI
 				}
 				entityUUID = &createdUUID
 
-			case strings.EqualFold(entityType, USER_ENTITY_TYPE) && strings.EqualFold(instanceAction, ACTION_CODE_UPDATE):
+			case strings.EqualFold(entityType, STUDENT_ENTITY_TYPE) && strings.EqualFold(instanceAction, ACTION_CODE_UPDATE):
 				if instanceEntityUUID == nil {
 					return false, errors.New("user update approval is missing entity UUID")
 				}
@@ -311,7 +311,7 @@ func ExecuteApproval(instanceUUID, tenantUUID string, actedBy, roleUUID uuid.UUI
 				}
 				entityUUID = instanceEntityUUID
 
-			case strings.EqualFold(entityType, USER_ENTITY_TYPE) && strings.EqualFold(instanceAction, ACTION_CODE_DELETE):
+			case strings.EqualFold(entityType, STUDENT_ENTITY_TYPE) && strings.EqualFold(instanceAction, ACTION_CODE_DELETE):
 				if instanceEntityUUID == nil {
 					return false, errors.New("user delete approval is missing entity UUID")
 				}
@@ -363,7 +363,9 @@ func ExecuteApproval(instanceUUID, tenantUUID string, actedBy, roleUUID uuid.UUI
 					return false, fmt.Errorf("canceled approval class: %w", err)
 				}
 				entityUUID = instanceEntityUUID
-			case strings.EqualFold(entityType, USER_ENTITY_TYPE):
+
+			//* Student
+			case strings.EqualFold(entityType, STUDENT_ENTITY_TYPE):
 				if instanceEntityUUID == nil {
 					break
 				}

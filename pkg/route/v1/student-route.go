@@ -24,37 +24,63 @@ func SetupStudentRoute(app *fiber.App, apiVersion string) {
 		if err = c.Bind().Body(payload); err != nil {
 			return helper.ReturnResponse(c, fiber.StatusBadRequest, "Invalid request body or missing role_uuid", nil, err)
 		}
-		if ok, permissionErr := helper.GetUserPermission(requesterUUID.String(), helper.CREATE_USER_PERMISSION); permissionErr != nil || !ok {
+
+		if ok, permissionErr := helper.GetUserPermission(requesterUUID.String(), helper.CREATE_STUDENT_PERMISSION); permissionErr != nil || !ok {
 			return helper.ReturnResponse(c, fiber.StatusUnauthorized, "Access Denied", nil, permissionErr)
 		}
+
+		// check user existing using email
+		if err = helper.UserStudentValidity(*payload); err != nil {
+			return helper.ReturnResponse(c, fiber.StatusInternalServerError, "Fail to check user", nil, err)
+		}
+
+		// get Siswa Role
+		studentRole, err := helper.GetRoleByAbbrName(helper.ROLE_STUDENT)
+		if err != nil {
+			return helper.ReturnResponse(c, fiber.StatusInternalServerError, "Failed to get student role", nil, err)
+		}
+
 		data := model.UserModel{TenantUUID: tenantUUID, Name: payload.Name, Email: payload.Email,
 			Phone: payload.Phone, Address: payload.Address, ImgLocation: payload.ImgLocation,
-			StatusUUID:  helper.DB_UUID_STATUS_ACTIVE,
+			StatusUUID: helper.DB_UUID_STATUS_ACTIVE, RoleUUID: studentRole.UUID,
 			CreatedDate: time.Now()}
 		canBypass, err := approvalBypass(requesterUUID)
 		if err != nil {
 			return helper.ReturnResponse(c, fiber.StatusInternalServerError, "Failed to check approval bypass", nil, err)
 		}
 		if canBypass {
-			id, insertErr := helper.InsertStudent(data)
+			id, insertErr := helper.InsertUserStudent(data)
 			if insertErr != nil {
 				return helper.ReturnResponse(c, fiber.StatusInternalServerError, "Failed to create user", nil, insertErr)
 			}
+			_, err = helper.InsertStudent(*payload, *id, helper.DB_UUID_STATUS_ACTIVE)
+			if err != nil {
+				return helper.ReturnResponse(c, fiber.StatusInternalServerError, "Failed to create student", nil, insertErr)
+			}
 			return helper.ReturnResponse(c, fiber.StatusOK, "success", map[string]any{"uuid": id}, nil)
 		}
-		workflow, err := determineStudentWorkflow(tenantUUID, requesterUUID, helper.CREATE_USER_PERMISSION, helper.ACTION_CODE_CREATE)
+		workflow, err := determineStudentWorkflow(tenantUUID, requesterUUID, helper.CREATE_STUDENT_PERMISSION, helper.ACTION_CODE_CREATE)
 		if err != nil {
 			return helper.ReturnResponse(c, fiber.StatusInternalServerError, "Failed to determine approval workflow", nil, err)
 		}
 		if workflow == nil {
+			// create user data first then student
+			userUUID, insertErr := helper.InsertUserStudent(data)
+			if insertErr != nil {
+				return helper.ReturnResponse(c, fiber.StatusInternalServerError, "Failed to create user", nil, insertErr)
+			}
+
 			var id *uuid.UUID
-			err = executeUserWorkflowFallback(func() error { id, err = helper.InsertStudent(data); return err })
+			err = executeUserWorkflowFallback(func() error {
+				id, err = helper.InsertStudent(*payload, *userUUID, helper.DB_UUID_STATUS_ACTIVE)
+				return err
+			})
 			if err != nil {
 				return helper.ReturnResponse(c, fiber.StatusInternalServerError, "Create rejected by workflow configuration", nil, err)
 			}
 			return helper.ReturnResponse(c, fiber.StatusOK, "success", map[string]any{"uuid": id}, nil)
 		}
-		approvalUUID, err := createStudentApproval(*workflow, tenantUUID, requesterUUID, nil, helper.ACTION_CODE_CREATE, data)
+		approvalUUID, err := createStudentApproval(*workflow, tenantUUID, requesterUUID, nil, helper.ACTION_CODE_CREATE, payload)
 		if err != nil {
 			return helper.ReturnResponse(c, fiber.StatusInternalServerError, "Failed to create user approval", nil, err)
 		}
@@ -240,7 +266,7 @@ func createStudentApproval(workflow model.ApprovalWorkflow, tenantUUID, userUUID
 	if err != nil {
 		return nil, err
 	}
-	id, err := helper.CreateApprovalInstance(model.ApprovalInstance{ApprovalWorkflowUUID: workflow.UUID, TenantUUID: tenantUUID, EntityType: helper.USER_ENTITY_TYPE, EntityUUID: entityUUID, ActionCode: action, RequestData: json.RawMessage(b), StatusUUID: helper.DB_UUID_STATUS_ACTIVE, RequestedBy: userUUID})
+	id, err := helper.CreateApprovalInstance(model.ApprovalInstance{ApprovalWorkflowUUID: workflow.UUID, TenantUUID: tenantUUID, EntityType: helper.STUDENT_ENTITY_TYPE, EntityUUID: entityUUID, ActionCode: action, RequestData: json.RawMessage(b), StatusUUID: helper.DB_UUID_STATUS_ACTIVE, RequestedBy: userUUID})
 	if err != nil {
 		return nil, err
 	}
