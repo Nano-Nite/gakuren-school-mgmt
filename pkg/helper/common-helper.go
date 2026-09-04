@@ -440,3 +440,61 @@ func MapIntoStuct[T any](source map[string]interface{}) (*T, error) {
 	err = json.Unmarshal(bytes, &result)
 	return &result, err
 }
+
+func ValidateRequest(c fiber.Ctx) (uuid.UUID, uuid.UUID, error) {
+	tenantUUID, err := uuid.Parse(c.Get("tenant_uuid"))
+	if err != nil {
+		return uuid.Nil, uuid.Nil, errors.New("invalid or missing tenant UUID")
+	}
+	userUUID, err := GetUserUUIDByAccessToken(c.Get("Authorization"))
+	if err != nil || userUUID == nil {
+		if err == nil {
+			err = errors.New("missing user UUID")
+		}
+		return uuid.Nil, uuid.Nil, err
+	}
+	return tenantUUID, *userUUID, nil
+}
+
+func ValidateApprovalBypass(userUUID uuid.UUID) (bool, error) {
+	ok, err := ApprovalBypass(userUUID.String())
+	if err != nil && err.Error() == "no rows in result set" {
+		return false, nil
+	}
+	return ok, err
+}
+
+func DetermineWorkflow(tenantUUID, userUUID uuid.UUID, permission, action string) (*model.ApprovalWorkflow, error) {
+	w, err := DetermineWorkflowApproval(tenantUUID.String(), userUUID.String(), permission, action, DB_UUID_STATUS_ACTIVE.String())
+	if err != nil && err.Error() == "no rows in result set" {
+		return nil, nil
+	}
+	return w, err
+}
+
+func ExecuteWorkflowFallback(operation func() error) error {
+	a, err := GetVariableUsingKey(WORKFLOW_NOTFOUND_BEHAVIOUR)
+	if err != nil {
+		return err
+	}
+	if a.Value == SAVE {
+		return operation()
+	}
+	if a.Value == REJECT {
+		return errors.New("rejected due workflow behaviour")
+	}
+	return errors.New("skipped due workflow behaviour")
+}
+
+func CreateApproval(workflow model.ApprovalWorkflow, tenantUUID, userUUID uuid.UUID, entityUUID *uuid.UUID, action string, entityType string, module string, data any) (*uuid.UUID, error) {
+	b, err := ConvertModelToJSON(data)
+	if err != nil {
+		return nil, err
+	}
+	id, err := CreateApprovalInstance(model.ApprovalInstance{ApprovalWorkflowUUID: workflow.UUID, TenantUUID: tenantUUID, EntityType: entityType, EntityUUID: entityUUID, ActionCode: action, RequestData: json.RawMessage(b), StatusUUID: DB_UUID_STATUS_ACTIVE, RequestedBy: userUUID}, module)
+	if err != nil {
+		return nil, err
+	}
+	_, err = CreateApprovalAction(model.ApprovalAction{ApprovalInstanceUUID: *id, ActionCode: ACTION_CODE_SUBMIT, ActedBy: userUUID, CreatedDate: time.Now()})
+	return id, err
+}

@@ -61,6 +61,11 @@ const CREATE_STUDENT_PERMISSION = "student.create"
 const UPDATE_STUDENT_PERMISSION = "student.update"
 const DELETE_STUDENT_PERMISSION = "student.delete"
 
+// TEACHER AND STAFF PERMISSION
+const CREATE_TNS_PERMISSION = "teacherandstaff.create"
+const UPDATE_TNS_PERMISSION = "teacherandstaff.update"
+const DELETE_TNS_PERMISSION = "teacherandstaff.delete"
+
 // const SUBMIT_CLASS_PERMISSION = "class.submit"
 // const APPROVE_CLASS_PERMISSION = "class.approve"
 // const REJECT_CLASS_PERMISSION = "class.reject"

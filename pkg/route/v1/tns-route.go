@@ -10,8 +10,8 @@ import (
 	"github.com/google/uuid"
 )
 
-func SetupStudentRoute(app *fiber.App, apiVersion string) {
-	studenBaseURL := apiVersion + "/school/student"
+func SetupTNSRoute(app *fiber.App, apiVersion string) {
+	studenBaseURL := apiVersion + "/school/tns"
 
 	app.Post(studenBaseURL+"/create", func(c fiber.Ctx) error {
 		payload := new(model.CreateStudentModel)
@@ -23,7 +23,7 @@ func SetupStudentRoute(app *fiber.App, apiVersion string) {
 			return helper.ReturnResponse(c, fiber.StatusBadRequest, "Invalid request body", nil, err)
 		}
 
-		if ok, permissionErr := helper.GetUserPermission(requesterUUID.String(), helper.CREATE_STUDENT_PERMISSION); permissionErr != nil || !ok {
+		if ok, permissionErr := helper.GetUserPermission(requesterUUID.String(), helper.CREATE_TNS_PERMISSION); permissionErr != nil || !ok {
 			return helper.ReturnResponse(c, fiber.StatusUnauthorized, "Access Denied", nil, permissionErr)
 		}
 
