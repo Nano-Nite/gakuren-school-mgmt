@@ -29,7 +29,7 @@ func ExecuteApproval(instanceUUID, tenantUUID string, actedBy, roleUUID uuid.UUI
 		return false, fmt.Errorf("unsupported approval command: %s", command)
 	}
 
-	tx, err := db.Conn.Begin(db.DBCtx)
+	tx, err := db.Conn.Begin(context.Background())
 	if err != nil {
 		return false, err
 	}
@@ -40,7 +40,7 @@ func ExecuteApproval(instanceUUID, tenantUUID string, actedBy, roleUUID uuid.UUI
 	var currentStep int
 	var entityType, instanceAction string
 	var requestData json.RawMessage
-	err = tx.QueryRow(db.DBCtx, `
+	err = tx.QueryRow(context.Background(), `
 		select approval_workflow_uuid, requested_by, current_step, status_uuid,
 		       entity_type, entity_uuid, action_code, request_data
 		from approval.approval_instance
@@ -55,7 +55,7 @@ func ExecuteApproval(instanceUUID, tenantUUID string, actedBy, roleUUID uuid.UUI
 	}
 
 	var statusName string
-	if err = tx.QueryRow(db.DBCtx, `select name from public.status where uuid = $1`, statusUUID).Scan(&statusName); err != nil {
+	if err = tx.QueryRow(context.Background(), `select name from public.status where uuid = $1`, statusUUID).Scan(&statusName); err != nil {
 		return false, err
 	}
 	if !strings.EqualFold(statusName, STATUS_ACTIVE) {
@@ -65,7 +65,7 @@ func ExecuteApproval(instanceUUID, tenantUUID string, actedBy, roleUUID uuid.UUI
 	var stepUUID uuid.UUID
 	var approverRoleUUID uuid.UUID
 	var requiredApprovals int
-	err = tx.QueryRow(db.DBCtx, `
+	err = tx.QueryRow(context.Background(), `
 		select uuid, approver_role_uuid, required_approvals
 		from approval.approval_step
 		where approval_workflow_uuid = $1 and step_order = $2
@@ -86,7 +86,7 @@ func ExecuteApproval(instanceUUID, tenantUUID string, actedBy, roleUUID uuid.UUI
 		actionStepUUID = &stepUUID
 
 		var alreadyActed bool
-		if err = tx.QueryRow(db.DBCtx, `
+		if err = tx.QueryRow(context.Background(), `
 			select exists (
 				select 1 from approval.approval_action
 				where approval_instance_uuid = $1
@@ -102,7 +102,7 @@ func ExecuteApproval(instanceUUID, tenantUUID string, actedBy, roleUUID uuid.UUI
 		}
 	}
 
-	_, err = tx.Exec(db.DBCtx, `
+	_, err = tx.Exec(context.Background(), `
 		insert into approval.approval_action
 			(approval_instance_uuid, approval_step_uuid, action_code, acted_by, note, created_date)
 		values ($1, $2, $3, $4, $5, now())
@@ -114,7 +114,7 @@ func ExecuteApproval(instanceUUID, tenantUUID string, actedBy, roleUUID uuid.UUI
 	finalized := command == ACTION_CODE_CANCEL || command == ACTION_CODE_REJECT
 	if command == ACTION_CODE_APPROVE {
 		var approvalCount int
-		if err = tx.QueryRow(db.DBCtx, `
+		if err = tx.QueryRow(context.Background(), `
 			select count(distinct acted_by)
 			from approval.approval_action
 			where approval_instance_uuid = $1
@@ -126,7 +126,7 @@ func ExecuteApproval(instanceUUID, tenantUUID string, actedBy, roleUUID uuid.UUI
 
 		if approvalCount >= requiredApprovals {
 			var hasNextStep bool
-			if err = tx.QueryRow(db.DBCtx, `
+			if err = tx.QueryRow(context.Background(), `
 				select exists (
 					select 1 from approval.approval_step
 					where approval_workflow_uuid = $1 and step_order = $2
@@ -135,7 +135,7 @@ func ExecuteApproval(instanceUUID, tenantUUID string, actedBy, roleUUID uuid.UUI
 				return false, err
 			}
 			if hasNextStep {
-				_, err = tx.Exec(db.DBCtx, `
+				_, err = tx.Exec(context.Background(), `
 					update approval.approval_instance
 					set current_step = current_step + 1, updated_date = now()
 					where uuid = $1
@@ -175,7 +175,7 @@ func ExecuteApproval(instanceUUID, tenantUUID string, actedBy, roleUUID uuid.UUI
 					return false, fmt.Errorf("invalid tenant UUID: %w", err)
 				}
 				var createdUUID uuid.UUID
-				err = tx.QueryRow(db.DBCtx, `
+				err = tx.QueryRow(context.Background(), `
 					insert into school_sch.class
 						(name, abbr_name, level, homeroom_teacher, status_uuid, created_date, updated_date, tenant_uuid)
 					values ($1, $2, $3, $4, $5, $6, $7, $8)
@@ -199,7 +199,7 @@ func ExecuteApproval(instanceUUID, tenantUUID string, actedBy, roleUUID uuid.UUI
 				}
 
 				var activeStatusUUID uuid.UUID
-				err = tx.QueryRow(db.DBCtx, `
+				err = tx.QueryRow(context.Background(), `
 					select uuid
 					from public.status
 					where lower(name) = lower($1)
@@ -217,7 +217,7 @@ func ExecuteApproval(instanceUUID, tenantUUID string, actedBy, roleUUID uuid.UUI
 					return false, fmt.Errorf("convert class approval request: %w", convertErr)
 				}
 
-				err = tx.QueryRow(db.DBCtx, `
+				err = tx.QueryRow(context.Background(), `
 					update school_sch.class
 					set name = $1, abbr_name = $2, level = $3,
 					    homeroom_teacher = $4, status_uuid = $5, updated_date = now()
@@ -240,7 +240,7 @@ func ExecuteApproval(instanceUUID, tenantUUID string, actedBy, roleUUID uuid.UUI
 				}
 
 				var deleteStatusUUID uuid.UUID
-				err = tx.QueryRow(db.DBCtx, `
+				err = tx.QueryRow(context.Background(), `
 					select uuid
 					from public.status
 					where lower(name) = lower($1)
@@ -253,7 +253,7 @@ func ExecuteApproval(instanceUUID, tenantUUID string, actedBy, roleUUID uuid.UUI
 					return false, fmt.Errorf("get inactive status: %w", err)
 				}
 
-				err = tx.QueryRow(db.DBCtx, `
+				err = tx.QueryRow(context.Background(), `
 					update school_sch.class
 					set status_uuid = $1, updated_date = now()
 					where uuid = $2 and tenant_uuid = $3
@@ -315,7 +315,7 @@ func ExecuteApproval(instanceUUID, tenantUUID string, actedBy, roleUUID uuid.UUI
 				}
 
 				// update user tabel first
-				err = tx.QueryRow(db.DBCtx, `
+				err = tx.QueryRow(context.Background(), `
 					update user_sch."user" set 
 						name=$1 ,email=$2, phone=$3, address=$4, updated_date=now()
 					where uuid=$5 and tenant_uuid=$6 returning uuid
@@ -328,7 +328,7 @@ func ExecuteApproval(instanceUUID, tenantUUID string, actedBy, roleUUID uuid.UUI
 				}
 
 				// then update student table
-				err = tx.QueryRow(db.DBCtx, `
+				err = tx.QueryRow(context.Background(), `
 					update school_sch.student set 
 						gender_uuid=$1, class_uuid=$2, nis=$3, nisn=$4, status_uuid =$5, updated_date=now()
 					where uuid=$6 returning uuid
@@ -351,7 +351,7 @@ func ExecuteApproval(instanceUUID, tenantUUID string, actedBy, roleUUID uuid.UUI
 					return false, fmt.Errorf("decode user approval request: %w", err)
 				}
 				// update user tabel first
-				err = tx.QueryRow(db.DBCtx, `
+				err = tx.QueryRow(context.Background(), `
 					update user_sch."user" set 
 						status_uuid=$1, updated_date=now()
 					where uuid=$2 and tenant_uuid=$3 returning uuid
@@ -364,7 +364,7 @@ func ExecuteApproval(instanceUUID, tenantUUID string, actedBy, roleUUID uuid.UUI
 				}
 
 				// then update student table
-				err = tx.QueryRow(db.DBCtx, `
+				err = tx.QueryRow(context.Background(), `
 					update school_sch.student set 
 						status_uuid =$1, updated_date=now()
 					where uuid=$2 returning uuid
@@ -389,7 +389,7 @@ func ExecuteApproval(instanceUUID, tenantUUID string, actedBy, roleUUID uuid.UUI
 				}
 
 				var activeStatusUUID uuid.UUID
-				err = tx.QueryRow(db.DBCtx, `
+				err = tx.QueryRow(context.Background(), `
 					select uuid
 					from public.status
 					where lower(name) = lower($1)
@@ -402,7 +402,7 @@ func ExecuteApproval(instanceUUID, tenantUUID string, actedBy, roleUUID uuid.UUI
 					return false, fmt.Errorf("get active status: %w", err)
 				}
 
-				err = tx.QueryRow(db.DBCtx, `
+				err = tx.QueryRow(context.Background(), `
 					update school_sch.class
 					set status_uuid = $1, updated_date = now()
 					where uuid = $2 and tenant_uuid = $3
@@ -421,7 +421,7 @@ func ExecuteApproval(instanceUUID, tenantUUID string, actedBy, roleUUID uuid.UUI
 				if instanceEntityUUID == nil {
 					break
 				}
-				err = tx.QueryRow(db.DBCtx, `update school_sch.student set status_uuid=$1,updated_date=now()
+				err = tx.QueryRow(context.Background(), `update school_sch.student set status_uuid=$1,updated_date=now()
 					where uuid=$2 returning uuid`, DB_UUID_STATUS_ACTIVE, instanceEntityUUID).Scan(instanceEntityUUID)
 				if errors.Is(err, pgx.ErrNoRows) {
 					return false, errors.New("cancel user target not found")
@@ -446,7 +446,7 @@ func ExecuteApproval(instanceUUID, tenantUUID string, actedBy, roleUUID uuid.UUI
 		}
 
 		var finalStatusUUID uuid.UUID
-		if err = tx.QueryRow(db.DBCtx, `
+		if err = tx.QueryRow(context.Background(), `
 			select uuid
 			from public.status
 			where lower(name) = any($1)
@@ -458,7 +458,7 @@ func ExecuteApproval(instanceUUID, tenantUUID string, actedBy, roleUUID uuid.UUI
 			}
 			return false, err
 		}
-		_, err = tx.Exec(db.DBCtx, `
+		_, err = tx.Exec(context.Background(), `
 			update approval.approval_instance
 			set status_uuid = $1, finalized_by = $2, finalized_date = now(),
 			    updated_date = now(), entity_uuid = coalesce($3, entity_uuid)
@@ -469,7 +469,7 @@ func ExecuteApproval(instanceUUID, tenantUUID string, actedBy, roleUUID uuid.UUI
 		}
 	}
 
-	if err = tx.Commit(db.DBCtx); err != nil {
+	if err = tx.Commit(context.Background()); err != nil {
 		return false, err
 	}
 	return finalized, nil
@@ -697,7 +697,7 @@ func DetailApproval(uuid string, tenantUUID string) (*model.DetailApprovalModel,
 }
 
 func UpdateApprovalInstancteStatus(uuid string, status string) error {
-	tx, err := db.Conn.Begin(db.DBCtx)
+	tx, err := db.Conn.Begin(context.Background())
 	if err != nil {
 		return err
 	}
@@ -709,15 +709,15 @@ func UpdateApprovalInstancteStatus(uuid string, status string) error {
 		return err
 	}
 	query := `UPDATE approval.approval_instance SET status_uuid = $1, updated_date = now() WHERE uuid = $2`
-	if err = db.ExecuteQuery(db.DBCtx, query, selectedStatus.UUID, uuid); err != nil {
+	if err = db.ExecuteQuery(context.Background(), query, selectedStatus.UUID, uuid); err != nil {
 		return err
 	}
 
-	return tx.Commit(db.DBCtx)
+	return tx.Commit(context.Background())
 }
 
 func InsertApprovalAction(payload model.ApprovalAction) error {
-	tx, err := db.Conn.Begin(db.DBCtx)
+	tx, err := db.Conn.Begin(context.Background())
 	if err != nil {
 		return err
 	}
@@ -732,7 +732,7 @@ func InsertApprovalAction(payload model.ApprovalAction) error {
 			note
 		) values ($1, $2, $3, $4, $5);
 	`
-	if err = db.ExecuteQuery(db.DBCtx, query,
+	if err = db.ExecuteQuery(context.Background(), query,
 		payload.ApprovalInstanceUUID,
 		payload.ApprovalStepUUID,
 		payload.ActionCode,
@@ -741,5 +741,5 @@ func InsertApprovalAction(payload model.ApprovalAction) error {
 		return err
 	}
 
-	return tx.Commit(db.DBCtx)
+	return tx.Commit(context.Background())
 }

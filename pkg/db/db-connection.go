@@ -5,14 +5,14 @@ import (
 	"log"
 	"os"
 	"strings"
+	"time"
 
-	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-var Conn *pgx.Conn
-var DBCtx context.Context
+var Conn *pgxpool.Pool
 
-func ConnectDB() {
+func ConnectDB() error {
 	dbURL := strings.TrimSpace("postgres://" +
 		os.Getenv("DATABASE_USERNAME") +
 		":" +
@@ -27,14 +27,28 @@ func ConnectDB() {
 		log.Fatal("DATABASE_URL is not set; configure the PostgreSQL connection string in the deployment environment")
 	}
 
-	conn, err := pgx.Connect(context.Background(), dbURL)
+	config, err := pgxpool.ParseConfig(dbURL)
 	if err != nil {
-		log.Printf("Unable to connect to database: %v\n", err)
-		os.Exit(1)
+		log.Fatal("parse database config: %w", err)
 	}
-	DBCtx = context.Background()
-	Conn = conn
-	// defer conn.Close(context.Background())
+
+	config.MaxConns = 20
+	config.MinConns = 2
+	config.MaxConnLifetime = 30 * time.Minute
+	config.MaxConnIdleTime = 5 * time.Minute
+	config.HealthCheckPeriod = 1 * time.Minute
+
+	Conn, err = pgxpool.NewWithConfig(context.Background(), config)
+	if err != nil {
+		return err
+	}
+
+	if err := Conn.Ping(context.Background()); err != nil {
+		Conn.Close()
+		return err
+	}
 
 	log.Println("DB Connected")
+	return nil
+
 }

@@ -222,7 +222,7 @@ func ConvertModelToJSON(data any) (string, error) {
 }
 
 func CreateApprovalInstance(instance model.ApprovalInstance, modul string) (*uuid.UUID, error) {
-	tx, err := db.Conn.Begin(db.DBCtx)
+	tx, err := db.Conn.Begin(context.Background())
 	if err != nil {
 		return nil, err
 	}
@@ -232,12 +232,12 @@ func CreateApprovalInstance(instance model.ApprovalInstance, modul string) (*uui
 	// this transaction commits or rolls back.
 	requestDate := time.Now()
 	lockKey := fmt.Sprintf("approval-ticket:%s:%d", instance.TenantUUID, requestDate.Year())
-	if _, err = tx.Exec(db.DBCtx, `select pg_advisory_xact_lock(hashtext($1))`, lockKey); err != nil {
+	if _, err = tx.Exec(context.Background(), `select pg_advisory_xact_lock(hashtext($1))`, lockKey); err != nil {
 		return nil, err
 	}
 
 	var institutionCode string
-	if err = tx.QueryRow(db.DBCtx,
+	if err = tx.QueryRow(context.Background(),
 		`select code from user_sch.tenant where uuid = $1`,
 		instance.TenantUUID,
 	).Scan(&institutionCode); err != nil {
@@ -245,7 +245,7 @@ func CreateApprovalInstance(instance model.ApprovalInstance, modul string) (*uui
 	}
 
 	var nextSequence int
-	if err = tx.QueryRow(db.DBCtx, `
+	if err = tx.QueryRow(context.Background(), `
 		select coalesce(max(
 			case
 				when split_part(ticket_number, '/', 1) ~ '^[0-9]+$'
@@ -306,7 +306,7 @@ func CreateApprovalInstance(instance model.ApprovalInstance, modul string) (*uui
 		returning uuid;
 	`
 	var resultUUID uuid.UUID
-	err = tx.QueryRow(db.DBCtx, query,
+	err = tx.QueryRow(context.Background(), query,
 		instance.ApprovalWorkflowUUID,
 		instance.TenantUUID,
 		ticketNumber,
@@ -325,14 +325,14 @@ func CreateApprovalInstance(instance model.ApprovalInstance, modul string) (*uui
 		return nil, err
 	}
 
-	if err = tx.Commit(db.DBCtx); err != nil {
+	if err = tx.Commit(context.Background()); err != nil {
 		return nil, err
 	}
 	return &resultUUID, nil
 }
 
 func CreateApprovalAction(action model.ApprovalAction) (*uuid.UUID, error) {
-	tx, err := db.Conn.Begin(db.DBCtx)
+	tx, err := db.Conn.Begin(context.Background())
 	if err != nil {
 		return nil, err
 	}
@@ -371,7 +371,7 @@ func CreateApprovalAction(action model.ApprovalAction) (*uuid.UUID, error) {
 		}
 	}
 
-	return resultUUID, tx.Commit(db.DBCtx)
+	return resultUUID, tx.Commit(context.Background())
 }
 
 func GenerateTicketNumber(sequence int, documentCode, moduleCode, institutionCode string, requestDate time.Time) (string, error) {

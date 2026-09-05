@@ -59,7 +59,7 @@ func GetStudent(userUUID, tenantUUID uuid.UUID) (*model.StudentModel, error) {
 
 func InsertUserStudent(data model.UserModel) (*uuid.UUID, error) {
 	var id uuid.UUID
-	err := db.Conn.QueryRow(db.DBCtx, `
+	err := db.Conn.QueryRow(context.Background(), `
 		insert into user_sch."user"
 			(tenant_uuid, name, email, phone, address, img_location, role_uuid,
 			 status_uuid, created_date, updated_date, version)
@@ -76,7 +76,7 @@ func InsertUserStudent(data model.UserModel) (*uuid.UUID, error) {
 
 func InsertStudent(data model.CreateStudentModel, userUUID, status uuid.UUID) (*uuid.UUID, error) {
 	var id uuid.UUID
-	err := db.Conn.QueryRow(db.DBCtx, `
+	err := db.Conn.QueryRow(context.Background(), `
 		INSERT INTO school_sch.student
 		(user_uuid, gender_uuid, class_uuid, nis, nisn, status_uuid,
 		parent_name,parent_phone,parent_email,parent_address)
@@ -92,13 +92,13 @@ func InsertStudent(data model.CreateStudentModel, userUUID, status uuid.UUID) (*
 }
 
 func UpdateStudent(data model.StudentModel) error {
-	tx, err := db.Conn.Begin(db.DBCtx)
+	tx, err := db.Conn.Begin(context.Background())
 	if err != nil {
 		return err
 	}
 	defer tx.Rollback(context.Background())
 
-	resultUpdateUser, err := tx.Exec(db.DBCtx, `
+	resultUpdateUser, err := tx.Exec(context.Background(), `
 		update user_sch.user
 			set name=$1, email=$2, phone=$3, address=$4, updated_date=now()
 		where uuid=$5
@@ -109,7 +109,7 @@ func UpdateStudent(data model.StudentModel) error {
 	if resultUpdateUser.RowsAffected() == 0 {
 		return errors.New("user not found")
 	}
-	resultUpdateStudent, err := tx.Exec(db.DBCtx, `
+	resultUpdateStudent, err := tx.Exec(context.Background(), `
 		update school_sch.student
 			set gender_uuid=$1, class_uuid=$2, nis=$3, nisn=$4, status_uuid=$5, updated_date = now(),
 			parent_name = $6, parent_email = $7, parent_phone = $8, parent_address = $9
@@ -122,11 +122,11 @@ func UpdateStudent(data model.StudentModel) error {
 	if resultUpdateStudent.RowsAffected() == 0 {
 		return errors.New("user not found")
 	}
-	return tx.Commit(db.DBCtx)
+	return tx.Commit(context.Background())
 }
 
 func UpdateStudentStatus(data model.StudentModel, tenantUUID, statusUUID uuid.UUID) error {
-	tx, err := db.Conn.Begin(db.DBCtx)
+	tx, err := db.Conn.Begin(context.Background())
 	if err != nil {
 		return err
 	}
@@ -134,7 +134,7 @@ func UpdateStudentStatus(data model.StudentModel, tenantUUID, statusUUID uuid.UU
 
 	//! we will think about it later, do we need to make user disabled too or not.
 	//! when user inactive during pending student status, they probably cannot login
-	// result1, err := tx.Exec(db.DBCtx, `
+	// result1, err := tx.Exec(context.Background(), `
 	// 	update user_sch."user" set status_uuid=$1, updated_date=now() where uuid=$2 and tenant_uuid=$3
 	// `, statusUUID, data.UserUUID, tenantUUID)
 	// if err != nil {
@@ -144,7 +144,7 @@ func UpdateStudentStatus(data model.StudentModel, tenantUUID, statusUUID uuid.UU
 	// 	return errors.New("user not found")
 	// }
 
-	result2, err := tx.Exec(db.DBCtx, `
+	result2, err := tx.Exec(context.Background(), `
 		update school_sch.student set status_uuid=$1, updated_date=now() where uuid=$2
 	`, statusUUID, data.UUID)
 	if err != nil {
@@ -153,7 +153,7 @@ func UpdateStudentStatus(data model.StudentModel, tenantUUID, statusUUID uuid.UU
 	if result2.RowsAffected() == 0 {
 		return errors.New("user not found")
 	}
-	return tx.Commit(db.DBCtx)
+	return tx.Commit(context.Background())
 }
 
 func SoftDeleteStudent(data model.StudentModel, tenantUUID uuid.UUID) error {

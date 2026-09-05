@@ -1,6 +1,7 @@
 package helper
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"strconv"
@@ -29,7 +30,7 @@ func GetClass(classUUID, tenantUUID uuid.UUID) (*model.ClassModel, error) {
 }
 
 func UpdateClass(data model.ClassModel) error {
-	result, err := db.Conn.Exec(db.DBCtx, `
+	result, err := db.Conn.Exec(context.Background(), `
 		update school_sch.class
 		set name = $1, abbr_name = $2, level = $3,
 		    homeroom_teacher = $4, updated_date = now()
@@ -45,7 +46,7 @@ func UpdateClass(data model.ClassModel) error {
 }
 
 func UpdateClassStatus(data model.ClassModel) error {
-	result, err := db.Conn.Exec(db.DBCtx, `
+	result, err := db.Conn.Exec(context.Background(), `
 		update school_sch.class
 		set status_uuid = $1, updated_date = now()
 		where uuid = $2 and tenant_uuid = $3
@@ -65,7 +66,7 @@ func SoftDeleteClass(classUUID, tenantUUID uuid.UUID) error {
 		return fmt.Errorf("get inactive status: %w", err)
 	}
 
-	result, err := db.Conn.Exec(db.DBCtx, `
+	result, err := db.Conn.Exec(context.Background(), `
 		update school_sch.class
 		set status_uuid = $1, updated_date = now()
 		where uuid = $2 and tenant_uuid = $3
@@ -97,7 +98,7 @@ func InsertClass(data model.ClassModel) error {
 	}
 
 	query = `INSERT INTO school_sch.class (name, abbr_name, level, homeroom_teacher,status_uuid, created_date, updated_date, tenant_uuid) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`
-	_, err = db.Conn.Exec(db.DBCtx, query, data.Name, data.AbbrName, data.Level, data.HomeroomTeacher, data.StatusUUID, data.CreatedDate, data.UpdatedDate, data.TenantUUID)
+	_, err = db.Conn.Exec(context.Background(), query, data.Name, data.AbbrName, data.Level, data.HomeroomTeacher, data.StatusUUID, data.CreatedDate, data.UpdatedDate, data.TenantUUID)
 	if err != nil {
 		if err.Error() != "no rows in result set" {
 			return err
