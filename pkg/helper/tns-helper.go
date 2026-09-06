@@ -468,10 +468,12 @@ func SearchTNSDetail(schoolUUID, tenantUUID, userUUID, tnsUUID uuid.UUID) (*mode
 			join public.subject s3 on es.subject_uuid = s3.uuid
 			where es.employee_uuid = e.uuid
 		) as subject
-		,s2.name as status
+		,s4.name as status_user
+		,s2.name as employee_status
 	from user_sch.user s
 	join employee.employee e on s.uuid = e.user_uuid  
 	join public.status s2 on e.status_uuid = s2.uuid
+	join public.status s4 on s.status_uuid = s4.uuid
 	join public.gender g on e.gender_uuid = g.uuid
 	where s.tenant_uuid = $1 
 	and s.school_uuid = $2

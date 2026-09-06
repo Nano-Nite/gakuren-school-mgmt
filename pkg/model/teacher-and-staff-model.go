@@ -96,22 +96,23 @@ type ReadTNSHeaderModelResult struct {
 }
 
 type ReadTNSDetailModelResult struct {
-	UUID       uuid.UUID         `db:"uuid" json:"uuid"`
-	Name       string            `db:"name" json:"name,omitempty"`
-	Email      string            `db:"email" json:"email,omitempty"`
-	Phone      string            `db:"phone" json:"phone,omitempty"`
-	Gender     string            `db:"gender" json:"gender,omitempty"`
-	BirthPlace string            `db:"birth_place" json:"birth_place,omitempty"`
-	BirthDate  time.Time         `db:"birth_date" json:"birth_date,omitempty" time_format:"2006-01-02"`
-	Address    string            `db:"address" json:"address,omitempty"`
-	NIK        string            `db:"nik" json:"nik,omitempty"`
-	NUPTK      *string           `db:"nuptk" json:"nuptk,omitempty"`
-	NIP        *string           `db:"nip" json:"nip,omitempty"`
-	JoinDate   time.Time         `db:"join_date" json:"join_date,omitempty"`
-	ResignDate *time.Time        `db:"resign_date" json:"resign_date,omitempty"`
-	Status     string            `db:"status" json:"status,omitempty"`
-	Educations []json.RawMessage `db:"educations" json:"educations,omitempty"`
-	Titles     []json.RawMessage `db:"titles" json:"titles,omitempty"`
-	Positions  []string          `db:"positions" json:"positions,omitempty"`
-	Subject    []string          `db:"subject" json:"subject,omitempty"`
+	UUID           uuid.UUID         `db:"uuid" json:"uuid"`
+	Name           string            `db:"name" json:"name,omitempty"`
+	Email          string            `db:"email" json:"email,omitempty"`
+	Phone          string            `db:"phone" json:"phone,omitempty"`
+	Gender         string            `db:"gender" json:"gender,omitempty"`
+	BirthPlace     string            `db:"birth_place" json:"birth_place,omitempty"`
+	BirthDate      time.Time         `db:"birth_date" json:"birth_date,omitempty" time_format:"2006-01-02"`
+	Address        string            `db:"address" json:"address,omitempty"`
+	NIK            string            `db:"nik" json:"nik,omitempty"`
+	NUPTK          *string           `db:"nuptk" json:"nuptk,omitempty"`
+	NIP            *string           `db:"nip" json:"nip,omitempty"`
+	JoinDate       time.Time         `db:"join_date" json:"join_date,omitempty"`
+	ResignDate     *time.Time        `db:"resign_date" json:"resign_date,omitempty"`
+	StatusUser     string            `db:"status_user" json:"status_user,omitempty"`
+	EmployeeStatus string            `db:"employee_status" json:"employee_status,omitempty"`
+	Educations     []json.RawMessage `db:"educations" json:"educations,omitempty"`
+	Titles         []json.RawMessage `db:"titles" json:"titles,omitempty"`
+	Positions      []string          `db:"positions" json:"positions,omitempty"`
+	Subject        []string          `db:"subject" json:"subject,omitempty"`
 }
