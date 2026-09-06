@@ -11,13 +11,11 @@ import (
 func GetSingleDataByQuery[T any](query string, param ...interface{}) (*T, error) {
 	rows, err := Conn.Query(context.Background(), query, param...)
 	if err != nil {
-		log.Println(err.Error())
 		return nil, err
 	}
 
 	result, err := pgx.CollectOneRow(rows, pgx.RowToStructByNameLax[T])
 	if err != nil {
-		log.Println(err.Error())
 		return nil, err
 	}
 
@@ -27,13 +25,11 @@ func GetSingleDataByQuery[T any](query string, param ...interface{}) (*T, error)
 func GetMultipleDataByQuery[T any](query string, param ...interface{}) (*[]T, error) {
 	rows, err := Conn.Query(context.Background(), query, param...)
 	if err != nil {
-		log.Println(err.Error())
 		return nil, err
 	}
 
 	result, err := pgx.CollectRows(rows, pgx.RowToStructByNameLax[T])
 	if err != nil {
-		log.Println(err.Error())
 		return nil, err
 	}
 

@@ -47,6 +47,7 @@ func SetupRoutes() {
 	SetupClassRoute(app, helper.API_VERSION)
 	SetupStudentRoute(app, helper.API_VERSION)
 	SetupApprovalRoute(app, helper.API_VERSION)
+	SetupTNSRoute(app, helper.API_VERSION)
 
 	port := strings.TrimSpace(os.Getenv("PORT"))
 	if port == "" {

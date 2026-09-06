@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log"
 	"strconv"
 	"strings"
 
@@ -62,12 +61,12 @@ func InsertUserStudent(data model.UserModel) (*uuid.UUID, error) {
 	err := db.Conn.QueryRow(context.Background(), `
 		insert into user_sch."user"
 			(tenant_uuid, name, email, phone, address, img_location, role_uuid,
-			 status_uuid, created_date, updated_date, version)
-		values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
+			 status_uuid, created_date, updated_date, version, school_uuid)
+		values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
 		returning uuid
 	`, data.TenantUUID, data.Name, data.Email, data.Phone, data.Address,
 		data.ImgLocation, data.RoleUUID, data.StatusUUID, data.CreatedDate,
-		data.UpdatedDate, data.Version).Scan(&id)
+		data.UpdatedDate, data.Version, data.SchoolUUID).Scan(&id)
 	if err != nil {
 		return nil, fmt.Errorf("insert user: %w", err)
 	}
@@ -241,9 +240,6 @@ func SearchStudent(tenantUUID uuid.UUID, payload model.SearchPayload) ([]model.R
 	if err != nil {
 		return nil, nil, err
 	}
-
-	log.Println(query)
-	log.Println(params...)
 
 	stats := CalculateDataStatisticResult(count, payload, len(*rows))
 	return *rows, &stats, nil

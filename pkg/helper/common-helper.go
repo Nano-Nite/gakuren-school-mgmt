@@ -163,22 +163,23 @@ func GetMenuUUID(userUUID string, permissionCode string) (*model.GetMenuUUID, er
 	return selectedMenuUUID, nil
 }
 
-func GetWorkflowApproval(tenantUUID string, actionCode string, menuUUID string, statusUUID string) (*model.ApprovalWorkflow, error) {
+func GetWorkflowApproval(schoolUUID, tenantUUID, actionCode string, menuUUID string, statusUUID string) (*model.ApprovalWorkflow, error) {
 	query := `
 	select * from approval.approval_workflow aw 
 	where aw.tenant_uuid = $1
 	and upper(aw.action_code)  = upper($2)
 	and aw.menu_uuid = $3
 	and aw.status_uuid = $4
+	and aw.school_uuid = $5
 	`
-	selectedWorkflow, err := db.GetSingleDataByQuery[model.ApprovalWorkflow](query, tenantUUID, actionCode, menuUUID, statusUUID)
+	selectedWorkflow, err := db.GetSingleDataByQuery[model.ApprovalWorkflow](query, tenantUUID, actionCode, menuUUID, statusUUID, schoolUUID)
 	if err != nil {
 		return nil, err
 	}
 	return selectedWorkflow, nil
 }
 
-func DetermineWorkflowApproval(tenantUUID string, userUUID string, permissionCode string, actionCode string, status string) (*model.ApprovalWorkflow, error) {
+func DetermineWorkflowApproval(schoolUUID string, tenantUUID string, userUUID string, permissionCode string, actionCode string, status string) (*model.ApprovalWorkflow, error) {
 	//* get menu id
 	selectedMenuUUID, err := GetMenuUUID(userUUID, permissionCode)
 	if err != nil {
@@ -200,7 +201,7 @@ func DetermineWorkflowApproval(tenantUUID string, userUUID string, permissionCod
 	}
 
 	//* get workflow
-	selectedWorkflow, err := GetWorkflowApproval(tenantUUID, selectedActionCode.Value, selectedMenuUUID.UUID.String(), status)
+	selectedWorkflow, err := GetWorkflowApproval(schoolUUID, tenantUUID, selectedActionCode.Value, selectedMenuUUID.UUID.String(), status)
 	if err != nil {
 		return nil, err
 	}
@@ -231,15 +232,15 @@ func CreateApprovalInstance(instance model.ApprovalInstance, modul string) (*uui
 	// Serialize ticket generation per tenant and year. The lock is released when
 	// this transaction commits or rolls back.
 	requestDate := time.Now()
-	lockKey := fmt.Sprintf("approval-ticket:%s:%d", instance.TenantUUID, requestDate.Year())
+	lockKey := fmt.Sprintf("approval-ticket:%s:%d", instance.SchoolUUID, requestDate.Year())
 	if _, err = tx.Exec(context.Background(), `select pg_advisory_xact_lock(hashtext($1))`, lockKey); err != nil {
 		return nil, err
 	}
 
 	var institutionCode string
 	if err = tx.QueryRow(context.Background(),
-		`select code from user_sch.tenant where uuid = $1`,
-		instance.TenantUUID,
+		`select code from school_sch.school where uuid = $1`,
+		instance.SchoolUUID,
 	).Scan(&institutionCode); err != nil {
 		return nil, fmt.Errorf("get institution code: %w", err)
 	}
@@ -255,7 +256,7 @@ func CreateApprovalInstance(instance model.ApprovalInstance, modul string) (*uui
 		from approval.approval_instance
 		where tenant_uuid = $1
 		  and split_part(ticket_number, '/', 5) = $2
-	`, instance.TenantUUID, fmt.Sprintf("%d", requestDate.Year())).Scan(&nextSequence); err != nil {
+	`, instance.SchoolUUID, fmt.Sprintf("%d", requestDate.Year())).Scan(&nextSequence); err != nil {
 		return nil, fmt.Errorf("get next ticket sequence: %w", err)
 	}
 
@@ -286,7 +287,8 @@ func CreateApprovalInstance(instance model.ApprovalInstance, modul string) (*uui
 			requested_date,
 			finalized_by,
 			finalized_date,
-			updated_date
+			updated_date,
+			school_uuid
 		) values (
 			$1::uuid, 
 			$2::uuid, 
@@ -301,7 +303,8 @@ func CreateApprovalInstance(instance model.ApprovalInstance, modul string) (*uui
 			$10,
 			$11,
 			$12,
-			$13
+			$13,
+			$14::uuid
 		)
 		returning uuid;
 	`
@@ -320,6 +323,7 @@ func CreateApprovalInstance(instance model.ApprovalInstance, modul string) (*uui
 		instance.FinalizedBy,
 		instance.FinalizedDate,
 		instance.UpdatedDate,
+		instance.SchoolUUID,
 	).Scan(&resultUUID)
 	if err != nil {
 		return nil, err
@@ -441,19 +445,25 @@ func MapIntoStuct[T any](source map[string]interface{}) (*T, error) {
 	return &result, err
 }
 
-func ValidateRequest(c fiber.Ctx) (uuid.UUID, uuid.UUID, error) {
+func ValidateRequest(c fiber.Ctx) (uuid.UUID, uuid.UUID, uuid.UUID, error) {
 	tenantUUID, err := uuid.Parse(c.Get("tenant_uuid"))
 	if err != nil {
-		return uuid.Nil, uuid.Nil, errors.New("invalid or missing tenant UUID")
+		return uuid.Nil, uuid.Nil, uuid.Nil, errors.New("invalid or missing tenant UUID")
 	}
+
+	schoolUUID, err := uuid.Parse(c.Get("school_uuid"))
+	if err != nil {
+		return uuid.Nil, uuid.Nil, uuid.Nil, errors.New("invalid or missing School UUID")
+	}
+
 	userUUID, err := GetUserUUIDByAccessToken(c.Get("Authorization"))
 	if err != nil || userUUID == nil {
 		if err == nil {
 			err = errors.New("missing user UUID")
 		}
-		return uuid.Nil, uuid.Nil, err
+		return uuid.Nil, uuid.Nil, uuid.Nil, err
 	}
-	return tenantUUID, *userUUID, nil
+	return schoolUUID, tenantUUID, *userUUID, nil
 }
 
 func ValidateApprovalBypass(userUUID uuid.UUID) (bool, error) {
@@ -464,8 +474,8 @@ func ValidateApprovalBypass(userUUID uuid.UUID) (bool, error) {
 	return ok, err
 }
 
-func DetermineWorkflow(tenantUUID, userUUID uuid.UUID, permission, action string) (*model.ApprovalWorkflow, error) {
-	w, err := DetermineWorkflowApproval(tenantUUID.String(), userUUID.String(), permission, action, DB_UUID_STATUS_ACTIVE.String())
+func DetermineWorkflow(schoolUUID, tenantUUID, userUUID uuid.UUID, permission, action string) (*model.ApprovalWorkflow, error) {
+	w, err := DetermineWorkflowApproval(schoolUUID.String(), tenantUUID.String(), userUUID.String(), permission, action, DB_UUID_STATUS_ACTIVE.String())
 	if err != nil && err.Error() == "no rows in result set" {
 		return nil, nil
 	}
@@ -486,12 +496,12 @@ func ExecuteWorkflowFallback(operation func() error) error {
 	return errors.New("skipped due workflow behaviour")
 }
 
-func CreateApproval(workflow model.ApprovalWorkflow, tenantUUID, userUUID uuid.UUID, entityUUID *uuid.UUID, action string, entityType string, module string, data any) (*uuid.UUID, error) {
+func CreateApproval(workflow model.ApprovalWorkflow, schoolUUID, tenantUUID, userUUID uuid.UUID, entityUUID *uuid.UUID, action string, entityType string, module string, data any) (*uuid.UUID, error) {
 	b, err := ConvertModelToJSON(data)
 	if err != nil {
 		return nil, err
 	}
-	id, err := CreateApprovalInstance(model.ApprovalInstance{ApprovalWorkflowUUID: workflow.UUID, TenantUUID: tenantUUID, EntityType: entityType, EntityUUID: entityUUID, ActionCode: action, RequestData: json.RawMessage(b), StatusUUID: DB_UUID_STATUS_ACTIVE, RequestedBy: userUUID}, module)
+	id, err := CreateApprovalInstance(model.ApprovalInstance{ApprovalWorkflowUUID: workflow.UUID, TenantUUID: tenantUUID, SchoolUUID: schoolUUID, EntityType: entityType, EntityUUID: entityUUID, ActionCode: action, RequestData: json.RawMessage(b), StatusUUID: DB_UUID_STATUS_ACTIVE, RequestedBy: userUUID}, module)
 	if err != nil {
 		return nil, err
 	}

@@ -9,6 +9,7 @@ import (
 type UserModel struct {
 	UUID        uuid.UUID  `db:"uuid" json:"uuid"`
 	TenantUUID  uuid.UUID  `db:"tenant_uuid" json:"tenant_uuid"`
+	SchoolUUID  uuid.UUID  `db:"school_uuid" json:"school_uuid"`
 	Name        *string    `db:"name" json:"name,omitempty"`
 	Email       *string    `db:"email" json:"email,omitempty"`
 	Phone       *string    `db:"phone" json:"phone,omitempty"`

@@ -11,6 +11,7 @@ type ApprovalWorkflow struct {
 	UUID        uuid.UUID  `db:"uuid"`
 	TenantUUID  uuid.UUID  `db:"tenant_uuid"`
 	MenuUUID    uuid.UUID  `db:"menu_uuid"`
+	SchoolUUID  uuid.UUID  `db:"school_uuid"`
 	Code        string     `db:"code"`
 	Name        string     `db:"name"`
 	ActionCode  string     `db:"action_code"`
@@ -25,6 +26,7 @@ type ApprovalInstance struct {
 	UUID                 uuid.UUID       `db:"uuid" json:"uuid"`
 	ApprovalWorkflowUUID uuid.UUID       `db:"approval_workflow_uuid" json:"approval_workflow_uuid"`
 	TenantUUID           uuid.UUID       `db:"tenant_uuid" json:"tenant_uuid"`
+	SchoolUUID           uuid.UUID       `db:"school_uuid" json:"school_uuid"`
 	TicketNumber         string          `db:"ticket_number" json:"ticket_number"`
 	EntityType           string          `db:"entity_type" json:"entity_type"`
 	EntityUUID           *uuid.UUID      `db:"entity_uuid" json:"entity_uuid,omitempty"`

@@ -56,3 +56,25 @@ type ReadGenderResult struct {
 	AbbrName *string   `db:"abbr_name" json:"abbr_name"`
 	Status   string    `db:"status" json:"status"`
 }
+
+type ResultPositionModel struct {
+	UUID     uuid.UUID `db:"uuid" json:"uuid"`
+	Name     string    `db:"name" json:"name"`
+	AbbrName *string   `db:"abbr_name" json:"abbr_name"`
+	Status   string    `db:"status" json:"status"`
+}
+
+type ResultTitleModel struct {
+	UUID     uuid.UUID `db:"uuid" json:"uuid"`
+	Name     string    `db:"name" json:"name"`
+	AbbrName *string   `db:"abbr_name" json:"abbr_name"`
+	Status   string    `db:"status" json:"status"`
+	IsPrefix bool      `db:"is_prefix" json:"is_prefix"`
+	Sequence int       `db:"sequence" json:"sequence"`
+}
+
+type ResultSubjectModel struct {
+	UUID     uuid.UUID `db:"uuid" json:"uuid"`
+	Name     string    `db:"name" json:"name"`
+	AbbrName *string   `db:"abbr_name" json:"abbr_name"`
+}

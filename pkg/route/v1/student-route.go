@@ -15,7 +15,7 @@ func SetupStudentRoute(app *fiber.App, apiVersion string) {
 
 	app.Post(studenBaseURL+"/create", func(c fiber.Ctx) error {
 		payload := new(model.CreateStudentModel)
-		tenantUUID, requesterUUID, err := helper.ValidateRequest(c)
+		schoolUUID, tenantUUID, requesterUUID, err := helper.ValidateRequest(c)
 		if err != nil {
 			return helper.ReturnResponse(c, fiber.StatusUnauthorized, "Missing or invalid authentication data", nil, err)
 		}
@@ -38,9 +38,16 @@ func SetupStudentRoute(app *fiber.App, apiVersion string) {
 			return helper.ReturnResponse(c, fiber.StatusInternalServerError, "Failed to get student role", nil, err)
 		}
 
-		data := model.UserModel{TenantUUID: tenantUUID, Name: payload.Name, Email: payload.Email,
-			Phone: payload.Phone, Address: payload.Address, ImgLocation: payload.ImgLocation,
-			StatusUUID: helper.DB_UUID_STATUS_ACTIVE, RoleUUID: studentRole.UUID,
+		data := model.UserModel{
+			TenantUUID:  tenantUUID,
+			SchoolUUID:  schoolUUID,
+			Name:        payload.Name,
+			Email:       payload.Email,
+			Phone:       payload.Phone,
+			Address:     payload.Address,
+			ImgLocation: payload.ImgLocation,
+			StatusUUID:  helper.DB_UUID_STATUS_NEWUSER,
+			RoleUUID:    studentRole.UUID,
 			CreatedDate: time.Now()}
 		canBypass, err := helper.ValidateApprovalBypass(requesterUUID)
 		if err != nil {
@@ -51,26 +58,26 @@ func SetupStudentRoute(app *fiber.App, apiVersion string) {
 			if insertErr != nil {
 				return helper.ReturnResponse(c, fiber.StatusInternalServerError, "Failed to create user", nil, insertErr)
 			}
-			_, err = helper.InsertStudent(*payload, *id, helper.DB_UUID_STATUS_ACTIVE)
+			_, err = helper.InsertStudent(*payload, *id, helper.DB_UUID_STATUS_NEWUSER)
 			if err != nil {
 				return helper.ReturnResponse(c, fiber.StatusInternalServerError, "Failed to create student", nil, insertErr)
 			}
 			return helper.ReturnResponse(c, fiber.StatusOK, "success", map[string]any{"uuid": id}, nil)
 		}
-		workflow, err := helper.DetermineWorkflow(tenantUUID, requesterUUID, helper.CREATE_STUDENT_PERMISSION, helper.ACTION_CODE_CREATE)
+		workflow, err := helper.DetermineWorkflow(schoolUUID, tenantUUID, requesterUUID, helper.CREATE_STUDENT_PERMISSION, helper.ACTION_CODE_CREATE)
 		if err != nil {
 			return helper.ReturnResponse(c, fiber.StatusInternalServerError, "Failed to determine approval workflow", nil, err)
 		}
 		if workflow == nil {
-			// create user data first then student
-			userUUID, insertErr := helper.InsertUserStudent(data)
-			if insertErr != nil {
-				return helper.ReturnResponse(c, fiber.StatusInternalServerError, "Failed to create user", nil, insertErr)
-			}
-
 			var id *uuid.UUID
 			err = helper.ExecuteWorkflowFallback(func() error {
-				id, err = helper.InsertStudent(*payload, *userUUID, helper.DB_UUID_STATUS_ACTIVE)
+				// create user data first then student
+				userUUID, insertErr := helper.InsertUserStudent(data)
+				if insertErr != nil {
+					return helper.ReturnResponse(c, fiber.StatusInternalServerError, "Failed to create user", nil, insertErr)
+				}
+
+				id, err = helper.InsertStudent(*payload, *userUUID, helper.DB_UUID_STATUS_NEWUSER)
 				return err
 			})
 			if err != nil {
@@ -78,7 +85,7 @@ func SetupStudentRoute(app *fiber.App, apiVersion string) {
 			}
 			return helper.ReturnResponse(c, fiber.StatusOK, "success", map[string]any{"uuid": id}, nil)
 		}
-		approvalUUID, err := helper.CreateApproval(*workflow, tenantUUID, requesterUUID, nil, helper.ACTION_CODE_CREATE, helper.STUDENT_ENTITY_TYPE, helper.STUDENT_MODULE_CODE, payload)
+		approvalUUID, err := helper.CreateApproval(*workflow, schoolUUID, tenantUUID, requesterUUID, nil, helper.ACTION_CODE_CREATE, helper.STUDENT_ENTITY_TYPE, helper.STUDENT_MODULE_CODE, payload)
 		if err != nil {
 			return helper.ReturnResponse(c, fiber.StatusInternalServerError, "Failed to create user approval", nil, err)
 		}
@@ -89,7 +96,7 @@ func SetupStudentRoute(app *fiber.App, apiVersion string) {
 		payload := new(model.UpdateStudentModel)
 
 		// validation header
-		tenantUUID, requesterUUID, err := helper.ValidateRequest(c)
+		schoolUUID, tenantUUID, requesterUUID, err := helper.ValidateRequest(c)
 		if err != nil {
 			return helper.ReturnResponse(c, fiber.StatusUnauthorized, "Missing or invalid authentication data", nil, err)
 		}
@@ -154,7 +161,7 @@ func SetupStudentRoute(app *fiber.App, apiVersion string) {
 		}
 
 		// workflow check
-		workflow, err := helper.DetermineWorkflow(tenantUUID, requesterUUID, helper.UPDATE_STUDENT_PERMISSION, helper.ACTION_CODE_UPDATE)
+		workflow, err := helper.DetermineWorkflow(schoolUUID, tenantUUID, requesterUUID, helper.UPDATE_STUDENT_PERMISSION, helper.ACTION_CODE_UPDATE)
 		if err != nil {
 			return helper.ReturnResponse(c, fiber.StatusInternalServerError, "Failed to determine approval workflow", nil, err)
 		}
@@ -166,7 +173,7 @@ func SetupStudentRoute(app *fiber.App, apiVersion string) {
 		}
 
 		// create approval
-		approvalUUID, err := helper.CreateApproval(*workflow, tenantUUID, requesterUUID, &payload.UUID, helper.ACTION_CODE_UPDATE, helper.STUDENT_ENTITY_TYPE, helper.STUDENT_MODULE_CODE, selectedData)
+		approvalUUID, err := helper.CreateApproval(*workflow, schoolUUID, tenantUUID, requesterUUID, &payload.UUID, helper.ACTION_CODE_UPDATE, helper.STUDENT_ENTITY_TYPE, helper.STUDENT_MODULE_CODE, selectedData)
 		if err != nil {
 			return helper.ReturnResponse(c, fiber.StatusInternalServerError, "Failed to create user update approval", nil, err)
 		}
@@ -182,7 +189,7 @@ func SetupStudentRoute(app *fiber.App, apiVersion string) {
 		payload := new(model.DeleteStudentModel)
 
 		// validation header
-		tenantUUID, requesterUUID, err := helper.ValidateRequest(c)
+		schoolUUID, tenantUUID, requesterUUID, err := helper.ValidateRequest(c)
 		if err != nil {
 			return helper.ReturnResponse(c, fiber.StatusUnauthorized, "Missing or invalid authentication data", nil, err)
 		}
@@ -222,7 +229,7 @@ func SetupStudentRoute(app *fiber.App, apiVersion string) {
 			return helper.ReturnResponse(c, fiber.StatusOK, "success", payload, nil)
 		}
 
-		workflow, err := helper.DetermineWorkflow(tenantUUID, requesterUUID, helper.DELETE_STUDENT_PERMISSION, helper.ACTION_CODE_DELETE)
+		workflow, err := helper.DetermineWorkflow(schoolUUID, tenantUUID, requesterUUID, helper.DELETE_STUDENT_PERMISSION, helper.ACTION_CODE_DELETE)
 		if err != nil {
 			return helper.ReturnResponse(c, fiber.StatusInternalServerError, "Failed to determine approval workflow", nil, err)
 		}
@@ -233,7 +240,7 @@ func SetupStudentRoute(app *fiber.App, apiVersion string) {
 			return helper.ReturnResponse(c, fiber.StatusOK, "success", payload, nil)
 		}
 
-		approvalUUID, err := helper.CreateApproval(*workflow, tenantUUID, requesterUUID, &payload.UUID, helper.ACTION_CODE_DELETE, helper.STUDENT_ENTITY_TYPE, helper.STUDENT_MODULE_CODE, selectedData)
+		approvalUUID, err := helper.CreateApproval(*workflow, schoolUUID, tenantUUID, requesterUUID, &payload.UUID, helper.ACTION_CODE_DELETE, helper.STUDENT_ENTITY_TYPE, helper.STUDENT_MODULE_CODE, selectedData)
 		if err != nil {
 			return helper.ReturnResponse(c, fiber.StatusInternalServerError, "Failed to create user delete approval", nil, err)
 		}
@@ -247,7 +254,7 @@ func SetupStudentRoute(app *fiber.App, apiVersion string) {
 
 	app.Post(studenBaseURL+"/get", func(c fiber.Ctx) error {
 		payload := new(model.SearchPayload)
-		tenantUUID, _, err := helper.ValidateRequest(c)
+		_, tenantUUID, _, err := helper.ValidateRequest(c)
 		if err != nil {
 			return helper.ReturnResponse(c, fiber.StatusUnauthorized, "Missing or invalid authentication data", nil, err)
 		}

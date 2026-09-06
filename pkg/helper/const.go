@@ -19,10 +19,12 @@ const APPROVAL_DOCUMENT_CODE = "APR"
 const CLASS_ENTITY_TYPE = "CLASS"
 const USER_ENTITY_TYPE = "USER"
 const STUDENT_ENTITY_TYPE = "STUDENT"
+const TNS_ENTITY_TYPE = "TNS"
 
 // MODULE CODE
 const CLASS_MODULE_CODE = "KLS"
 const STUDENT_MODULE_CODE = "MRD"
+const TNS_MODULE_CODE = "TNS"
 
 // DEFAULT SETTING
 const DEFAULT_ROW_PER_PAGES = 10
@@ -33,6 +35,7 @@ const STATUS_ACTIVE = "Active"
 const STATUS_INACTIVE = "Inactive"
 const STATUS_PENDING = "Pending"
 const STATUS_DELETE = "Delete"
+const STATUS_NEW_USER = "New User"
 
 // ACTION CODE
 const ACTION_CODE_CREATE = "CREATE"
@@ -75,6 +78,7 @@ var DB_UUID_STATUS_ACTIVE uuid.UUID
 var DB_UUID_STATUS_PENDING uuid.UUID
 var DB_UUID_STATUS_INACTIVE uuid.UUID
 var DB_UUID_STATUS_DELETE uuid.UUID
+var DB_UUID_STATUS_NEWUSER uuid.UUID
 
 // ROLE NAME
 const ROLE_STAFF_TU = "STAFF_TU"
@@ -82,7 +86,7 @@ const ROLE_WAKA_KUR = "WAKASEK_KURIKULUM"
 const ROLE_KEPSEK = "KEPALA_SEKOLAH"
 const ROLE_STUDENT = "SISWA"
 const ROLE_TEACHER = "GURU"
-const ROLE_STAFF = "GURU_STAFF"
+const ROLE_STAFF = "STAFF"
 
 func init() {
 	if API_VERSION == "" {
@@ -114,6 +118,12 @@ func InitVariableDB() {
 		log.Fatal("Critical error loading configuration: ", err)
 	} else {
 		DB_UUID_STATUS_DELETE = deleteStatus.UUID
+	}
+	newUserStatus, err := GetStatusByName(STATUS_NEW_USER)
+	if err != nil {
+		log.Fatal("Critical error loading configuration: ", err)
+	} else {
+		DB_UUID_STATUS_NEWUSER = newUserStatus.UUID
 	}
 
 	log.Println("Variable Loaded")
