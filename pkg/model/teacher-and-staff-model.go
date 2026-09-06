@@ -27,21 +27,21 @@ import (
 // }
 
 type CreateTNSModel struct {
-	Biodata        TNSBioModel           `db:"biodata" json:"biodata,omitempty"`
-	EducationLevel []TNSEducationModel   `db:"education_level" json:"education_level,omitempty"`
-	ImgLocation    string                `db:"img_location" json:"img_location,omitempty"`
-	IsStaff        bool                  `db:"is_staff" json:"is_staff,omitempty"`
-	NIK            string                `db:"nik" json:"nik,omitempty"`
-	NUPTK          *string               `db:"nuptk" json:"nuptk,omitempty"`
-	NIP            *string               `db:"nip" json:"nip,omitempty"`
-	Positions      []ResultPositionModel `db:"positions" json:"positions,omitempty"`
-	Titles         []ResultTitleModel    `db:"titles" json:"titles,omitempty"`
-	Subjects       []ResultSubjectModel  `db:"subjects" json:"subjects,omitempty"`
-	JoinDate       *time.Time            `db:"join_date" json:"join_date,omitempty"`
-	ResignDate     *time.Time            `db:"resign_date" json:"resign_date,omitempty"`
-	StatusUUID     uuid.UUID             `db:"status_uuid" json:"status_uuid,omitempty"`
-	CreatedDate    time.Time             `db:"created_date" json:"created_date,omitempty"`
-	UpdatedDate    *time.Time            `db:"updated_date" json:"updated_date,omitempty"`
+	Biodata            TNSBioModel           `db:"biodata" json:"biodata,omitempty"`
+	EducationLevel     []TNSEducationModel   `db:"education_level" json:"education_level,omitempty"`
+	ImgLocation        string                `db:"img_location" json:"img_location,omitempty"`
+	IsStaff            bool                  `db:"is_staff" json:"is_staff,omitempty"`
+	NIK                string                `db:"nik" json:"nik,omitempty"`
+	NUPTK              *string               `db:"nuptk" json:"nuptk,omitempty"`
+	NIP                *string               `db:"nip" json:"nip,omitempty"`
+	Positions          []ResultPositionModel `db:"positions" json:"positions,omitempty"`
+	Titles             []ResultTitleModel    `db:"titles" json:"titles,omitempty"`
+	Subjects           []ResultSubjectModel  `db:"subjects" json:"subjects,omitempty"`
+	JoinDate           *time.Time            `db:"join_date" json:"join_date,omitempty"`
+	ResignDate         *time.Time            `db:"resign_date" json:"resign_date,omitempty"`
+	EmployeeStatusUUID uuid.UUID             `db:"employee_status_uuid" json:"employee_status_uuid,omitempty"`
+	CreatedDate        time.Time             `db:"created_date" json:"created_date,omitempty"`
+	UpdatedDate        *time.Time            `db:"updated_date" json:"updated_date,omitempty"`
 }
 
 type TNSBioModel struct {

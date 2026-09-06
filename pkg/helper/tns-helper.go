@@ -55,7 +55,7 @@ import (
 // 	return data, err
 // }
 
-func InsertTNS(data model.CreateTNSModel, userData model.UserModel, status, tenantUUID, schoolUUID uuid.UUID) (*uuid.UUID, error) {
+func InsertTNS(data model.CreateTNSModel, userData model.UserModel, tenantUUID, schoolUUID uuid.UUID) (*uuid.UUID, error) {
 	tx, err := db.Conn.Begin(context.Background())
 	if err != nil {
 		return nil, err
@@ -102,7 +102,7 @@ func InsertTNS(data model.CreateTNSModel, userData model.UserModel, status, tena
 		data.NIP,
 		data.Biodata.GenderUUID,
 		data.JoinDate,
-		status,
+		data.EmployeeStatusUUID,
 		data.Biodata.BirthPlace,
 		data.Biodata.BirthDate).Scan(&employeeUUID)
 	if err != nil {

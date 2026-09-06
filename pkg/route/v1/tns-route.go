@@ -28,7 +28,7 @@ func SetupTNSRoute(app *fiber.App, apiVersion string) {
 
 		// check user existing using email
 		if err = helper.UserTNSValidity(*payload); err != nil {
-			return helper.ReturnResponse(c, fiber.StatusInternalServerError, "Fail to check user", nil, err)
+			return helper.ReturnResponse(c, fiber.StatusInternalServerError, "User contain another user data", nil, err)
 		}
 
 		// get teacher or staff role
@@ -58,7 +58,7 @@ func SetupTNSRoute(app *fiber.App, apiVersion string) {
 			return helper.ReturnResponse(c, fiber.StatusInternalServerError, "Failed to check approval bypass", nil, err)
 		}
 		if canBypass {
-			id, err := helper.InsertTNS(*payload, data, helper.DB_UUID_STATUS_NEWUSER, tenantUUID, schoolUUID)
+			id, err := helper.InsertTNS(*payload, data, tenantUUID, schoolUUID)
 			if err != nil {
 				return helper.ReturnResponse(c, fiber.StatusInternalServerError, "Failed to create Teacher or Staff", nil, err)
 			}
@@ -72,7 +72,7 @@ func SetupTNSRoute(app *fiber.App, apiVersion string) {
 			var id *uuid.UUID
 			err = helper.ExecuteWorkflowFallback(func() error {
 				// create user data first then employee
-				id, err = helper.InsertTNS(*payload, data, helper.DB_UUID_STATUS_NEWUSER, tenantUUID, schoolUUID)
+				id, err = helper.InsertTNS(*payload, data, tenantUUID, schoolUUID)
 				return err
 			})
 			if err != nil {
