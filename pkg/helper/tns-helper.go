@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log"
 	"strconv"
 	"strings"
 
@@ -338,10 +337,12 @@ func SearchTNSHeader(schoolUUID, tenantUUID, userUUID uuid.UUID, payload model.S
 			,s.email 
 			,s.phone 
 			,r.name as occupation
-			,s2.name as status
+			,s3.name as status_user
+			,s2.name as employee_status
 		from user_sch.user s
 		join employee.employee e on s.uuid = e.user_uuid  
 		join public.status s2 on e.status_uuid = s2.uuid
+		join public.status s3 on s.status_uuid = s3.uuid
 		join user_sch.role r on s.role_uuid = r.uuid
 		where s.tenant_uuid = $1 and s.school_uuid = $2
 
@@ -361,7 +362,8 @@ func SearchTNSHeader(schoolUUID, tenantUUID, userUUID uuid.UUID, payload model.S
 	if payload.Filter != nil {
 		if status, ok := (*payload.Filter)["status"].(string); ok && status != "" {
 			params = append(params, status)
-			where += " and lower(status)=lower($" + strconv.Itoa(len(params)) + ")"
+			where += " and (lower(status_user)=lower($" + strconv.Itoa(len(params)) + ")"
+			where += " or lower(employee_status)=lower($" + strconv.Itoa(len(params)) + "))"
 		}
 
 		if id, ok := (*payload.Filter)["uuid"].(string); ok && id != "" {
@@ -371,9 +373,8 @@ func SearchTNSHeader(schoolUUID, tenantUUID, userUUID uuid.UUID, payload model.S
 	}
 
 	params = append(params, STATUS_DELETE)
-	where += " and lower(status) != lower($" + strconv.Itoa(len(params)) + ")"
-
-	log.Println(base + " select count(*) from datas where " + where)
+	where += " and (lower(status_user) != lower($" + strconv.Itoa(len(params)) + ")"
+	where += " or lower(employee_status) != lower($" + strconv.Itoa(len(params)) + "))"
 
 	count, err := db.GetSingleDataByQuery[model.CountResult](base+" select count(*) from datas where "+where, params...)
 	if err != nil {

@@ -86,13 +86,14 @@ type TNSEducationModel struct {
 // }
 
 type ReadTNSHeaderModelResult struct {
-	UUID       uuid.UUID `db:"uuid" json:"uuid"`
-	Name       *string   `db:"name" json:"name,omitempty"`
-	NIP        *string   `db:"nip" json:"nip,omitempty"`
-	Email      *string   `db:"email" json:"email,omitempty"`
-	Phone      *string   `db:"phone" json:"phone,omitempty"`
-	Occupation string    `db:"occupation" json:"occupation,omitempty"`
-	Status     string    `db:"status" json:"status"`
+	UUID           uuid.UUID `db:"uuid" json:"uuid"`
+	Name           *string   `db:"name" json:"name,omitempty"`
+	NIP            *string   `db:"nip" json:"nip,omitempty"`
+	Email          *string   `db:"email" json:"email,omitempty"`
+	Phone          *string   `db:"phone" json:"phone,omitempty"`
+	Occupation     string    `db:"occupation" json:"occupation,omitempty"`
+	StatusUser     string    `db:"status_user" json:"status_user,omitempty"`
+	EmployeeStatus string    `db:"employee_status" json:"employee_status,omitempty"`
 }
 
 type ReadTNSDetailModelResult struct {
