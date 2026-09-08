@@ -23,7 +23,7 @@ var (
 // ExecuteApproval records an approval decision and updates the instance in one
 // transaction. The instance row is locked so two approvers cannot advance the
 // same step independently.
-func ExecuteApproval(instanceUUID, tenantUUID string, actedBy, roleUUID uuid.UUID, command string, note *string) (bool, error) {
+func ExecuteApproval(instanceUUID, schoolUUID, tenantUUID string, actedBy, roleUUID uuid.UUID, command string, note *string) (bool, error) {
 	command = strings.ToUpper(strings.TrimSpace(command))
 	if command != ACTION_CODE_CANCEL && command != ACTION_CODE_REJECT && command != ACTION_CODE_APPROVE {
 		return false, fmt.Errorf("unsupported approval command: %s", command)
@@ -40,6 +40,17 @@ func ExecuteApproval(instanceUUID, tenantUUID string, actedBy, roleUUID uuid.UUI
 	var currentStep int
 	var entityType, instanceAction string
 	var requestData json.RawMessage
+
+	parsedTenantUUID, err := uuid.Parse(tenantUUID)
+	if err != nil {
+		return false, fmt.Errorf("invalid tenant UUID: %w", err)
+	}
+	parsedSchoolUUID, err := uuid.Parse(schoolUUID)
+	if err != nil {
+		return false, fmt.Errorf("invalid school UUID: %w", err)
+	}
+
+	// lock the approval instance row for update
 	err = tx.QueryRow(context.Background(), `
 		select approval_workflow_uuid, requested_by, current_step, status_uuid,
 		       entity_type, entity_uuid, action_code, request_data
@@ -54,6 +65,7 @@ func ExecuteApproval(instanceUUID, tenantUUID string, actedBy, roleUUID uuid.UUI
 		return false, err
 	}
 
+	// check if the approval instance is still active
 	var statusName string
 	if err = tx.QueryRow(context.Background(), `select name from public.status where uuid = $1`, statusUUID).Scan(&statusName); err != nil {
 		return false, err
@@ -62,6 +74,7 @@ func ExecuteApproval(instanceUUID, tenantUUID string, actedBy, roleUUID uuid.UUI
 		return false, ErrApprovalFinalized
 	}
 
+	// get the current step details
 	var stepUUID uuid.UUID
 	var approverRoleUUID uuid.UUID
 	var requiredApprovals int
@@ -102,6 +115,7 @@ func ExecuteApproval(instanceUUID, tenantUUID string, actedBy, roleUUID uuid.UUI
 		}
 	}
 
+	// insert approval action record
 	_, err = tx.Exec(context.Background(), `
 		insert into approval.approval_action
 			(approval_instance_uuid, approval_step_uuid, action_code, acted_by, note, created_date)
@@ -111,6 +125,7 @@ func ExecuteApproval(instanceUUID, tenantUUID string, actedBy, roleUUID uuid.UUI
 		return false, err
 	}
 
+	// check if the approval instance is finalized
 	finalized := command == ACTION_CODE_CANCEL || command == ACTION_CODE_REJECT
 	if command == ACTION_CODE_APPROVE {
 		var approvalCount int
@@ -317,9 +332,9 @@ func ExecuteApproval(instanceUUID, tenantUUID string, actedBy, roleUUID uuid.UUI
 				// update user tabel first
 				err = tx.QueryRow(context.Background(), `
 					update user_sch."user" set 
-						name=$1 ,email=$2, phone=$3, address=$4, updated_date=now()
+						name=$1 , phone=$2, address=$3, updated_date=now()
 					where uuid=$5 and tenant_uuid=$6 returning uuid
-				`, userData.Name, userData.Email, userData.Phone, userData.Address, userData.UserUUID, tenantUUID).Scan(instanceEntityUUID)
+				`, userData.Name, userData.Phone, userData.Address, userData.UserUUID, tenantUUID).Scan(instanceEntityUUID)
 				if errors.Is(err, pgx.ErrNoRows) {
 					return false, errors.New("approved user update target not found")
 				}
@@ -377,15 +392,101 @@ func ExecuteApproval(instanceUUID, tenantUUID string, actedBy, roleUUID uuid.UUI
 				}
 				entityUUID = instanceEntityUUID
 
+			//* Teacher and Staff CRUD
+			// create
+			case strings.EqualFold(entityType, TNS_ENTITY_TYPE) && strings.EqualFold(instanceAction, ACTION_CODE_CREATE):
+				var data model.CreateTNSModel
+				if err = json.Unmarshal(requestData, &data); err != nil {
+					return false, fmt.Errorf("decode user approval request: %w", err)
+				}
+				parsedTenantUUID, err := uuid.Parse(tenantUUID)
+				if err != nil {
+					return false, fmt.Errorf("invalid tenant UUID: %w", err)
+				}
+				parsedSchoolUUID, err := uuid.Parse(schoolUUID)
+				if err != nil {
+					return false, fmt.Errorf("invalid school UUID: %w", err)
+				}
+
+				var selectedRole model.RoleModel
+				if data.IsStaff {
+					role, err := GetRoleByAbbrName(ROLE_STAFF)
+					if err != nil {
+						return false, fmt.Errorf("role not found: %w", err)
+					}
+					selectedRole = *role
+				} else {
+					role, err := GetRoleByAbbrName(ROLE_TEACHER)
+					if err != nil {
+						return false, fmt.Errorf("role not found: %w", err)
+					}
+					selectedRole = *role
+				}
+
+				userData := model.UserModel{
+					TenantUUID: parsedTenantUUID,
+					Name:       &data.Biodata.Fullname,
+					Email:      &data.Biodata.Email,
+					Phone:      &data.Biodata.Phone,
+					Address:    &data.Biodata.Address,
+					RoleUUID:   selectedRole.UUID,
+					StatusUUID: DB_UUID_STATUS_NEWUSER,
+				}
+
+				id, insertErr := InsertTNS(data, userData, parsedTenantUUID, parsedSchoolUUID)
+				if insertErr != nil {
+					return false, nil
+				}
+
+				entityUUID = id
+			//update
+			case strings.EqualFold(entityType, TNS_ENTITY_TYPE) && strings.EqualFold(instanceAction, ACTION_CODE_UPDATE):
+				if instanceEntityUUID == nil {
+					return false, errors.New("user update approval is missing entity UUID")
+				}
+				var data model.UpdateTNSModel
+				if err = json.Unmarshal(requestData, &data); err != nil {
+					return false, fmt.Errorf("decode user approval request: %w", err)
+				}
+
+				// update user and employee table
+				if err = UpdateTNS(data, parsedTenantUUID, parsedSchoolUUID); err != nil {
+					return false, fmt.Errorf("update Teacher or Staff: %w", err)
+				}
+
+				// update user status
+				if err = UpdateTNSStatus(data, parsedSchoolUUID, parsedTenantUUID, DB_UUID_STATUS_ACTIVE); err != nil {
+					return false, fmt.Errorf("update Teacher or Staff: %w", err)
+				}
+
+				entityUUID = instanceEntityUUID
+			// delete
+			case strings.EqualFold(entityType, TNS_ENTITY_TYPE) && strings.EqualFold(instanceAction, ACTION_CODE_DELETE):
+				if instanceEntityUUID == nil {
+					return false, errors.New("teacher and staff delete approval is missing entity UUID")
+				}
+				var data model.UpdateTNSModel
+				if err = json.Unmarshal(requestData, &data); err != nil {
+					return false, fmt.Errorf("decode user approval request: %w", err)
+				}
+
+				err := SoftDeleteTNS(data, parsedTenantUUID, parsedSchoolUUID)
+				if err != nil {
+					return false, fmt.Errorf("delete approval teacher or staff: %w", err)
+				}
+
+				entityUUID = instanceEntityUUID
+
 			default:
 				return false, fmt.Errorf("unsupported approved entity/action: %s/%s", entityType, instanceAction)
 			}
-		case ACTION_CODE_CANCEL, ACTION_CODE_REJECT:
+		case ACTION_CODE_CANCEL, ACTION_CODE_REJECT: // cancel or reject
 			switch {
 			//* Class
 			case strings.EqualFold(entityType, CLASS_ENTITY_TYPE):
+				// in case create data but canceled at time
 				if instanceEntityUUID == nil {
-					break // rejected/cancelled CREATE has no persisted entity to restore
+					break
 				}
 
 				var activeStatusUUID uuid.UUID
@@ -418,10 +519,27 @@ func ExecuteApproval(instanceUUID, tenantUUID string, actedBy, roleUUID uuid.UUI
 
 			//* Student
 			case strings.EqualFold(entityType, STUDENT_ENTITY_TYPE):
+				// in case create data but canceled at time
 				if instanceEntityUUID == nil {
 					break
 				}
 				err = tx.QueryRow(context.Background(), `update school_sch.student set status_uuid=$1,updated_date=now()
+					where uuid=$2 returning uuid`, DB_UUID_STATUS_ACTIVE, instanceEntityUUID).Scan(instanceEntityUUID)
+				if errors.Is(err, pgx.ErrNoRows) {
+					return false, errors.New("cancel user target not found")
+				}
+				if err != nil {
+					return false, fmt.Errorf("cancel user approval: %w", err)
+				}
+				entityUUID = instanceEntityUUID
+
+			//* TNS
+			case strings.EqualFold(entityType, TNS_ENTITY_TYPE):
+				// in case create data but canceled at time
+				if instanceEntityUUID == nil {
+					break
+				}
+				err = tx.QueryRow(context.Background(), `update user_sch.user set status_uuid=$1,updated_date=now()
 					where uuid=$2 returning uuid`, DB_UUID_STATUS_ACTIVE, instanceEntityUUID).Scan(instanceEntityUUID)
 				if errors.Is(err, pgx.ErrNoRows) {
 					return false, errors.New("cancel user target not found")

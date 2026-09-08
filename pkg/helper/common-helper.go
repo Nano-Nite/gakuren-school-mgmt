@@ -254,7 +254,7 @@ func CreateApprovalInstance(instance model.ApprovalInstance, modul string) (*uui
 			end
 		), 0) + 1
 		from approval.approval_instance
-		where tenant_uuid = $1
+		where school_uuid = $1
 		  and split_part(ticket_number, '/', 5) = $2
 	`, instance.SchoolUUID, fmt.Sprintf("%d", requestDate.Year())).Scan(&nextSequence); err != nil {
 		return nil, fmt.Errorf("get next ticket sequence: %w", err)

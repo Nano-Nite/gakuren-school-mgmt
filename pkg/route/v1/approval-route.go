@@ -88,6 +88,7 @@ func SetupApprovalRoute(app *fiber.App, API_VERSION string) {
 	app.Patch(API_VERSION+"/school/approval/my-approval/execute", func(c fiber.Ctx) error {
 		payload := new(model.ExecuteApprovalPayload)
 		tenantUUID := c.Get("tenant_uuid")
+		schoolUUID := c.Get("school_uuid")
 		authHeader := c.Get("Authorization")
 
 		if len(tenantUUID) == 0 || len(authHeader) == 0 {
@@ -104,6 +105,10 @@ func SetupApprovalRoute(app *fiber.App, API_VERSION string) {
 		}
 
 		if len(tenantUUID) == 0 {
+			return helper.ReturnResponse(c, fiber.StatusBadRequest, "Invalid or Missing between request body and header", nil, nil)
+		}
+
+		if len(schoolUUID) == 0 {
 			return helper.ReturnResponse(c, fiber.StatusBadRequest, "Invalid or Missing between request body and header", nil, nil)
 		}
 
@@ -145,7 +150,7 @@ func SetupApprovalRoute(app *fiber.App, API_VERSION string) {
 		if strings.TrimSpace(payload.Note) != "" {
 			note = &payload.Note
 		}
-		finalized, err := helper.ExecuteApproval(payload.UUID, tenantUUID, selectedUser.UUID, selectedUser.RoleUUID, command, note)
+		finalized, err := helper.ExecuteApproval(payload.UUID, schoolUUID, tenantUUID, selectedUser.UUID, selectedUser.RoleUUID, command, note)
 		if err != nil {
 			switch {
 			case errors.Is(err, helper.ErrApprovalFinalized):

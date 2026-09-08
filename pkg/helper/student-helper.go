@@ -99,9 +99,9 @@ func UpdateStudent(data model.StudentModel) error {
 
 	resultUpdateUser, err := tx.Exec(context.Background(), `
 		update user_sch.user
-			set name=$1, email=$2, phone=$3, address=$4, updated_date=now()
-		where uuid=$5
-	`, data.Name, data.Email, data.Phone, data.Address, data.UserUUID)
+			set name=$1, phone=$2, address=$3, updated_date=now()
+		where uuid=$4
+	`, data.Name, data.Phone, data.Address, data.UserUUID)
 	if err != nil {
 		return fmt.Errorf("update user: %w", err)
 	}

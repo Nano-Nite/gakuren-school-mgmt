@@ -1,7 +1,6 @@
 package v1
 
 import (
-	"strings"
 	"time"
 
 	"gakuren-system.com/pkg/helper"
@@ -123,7 +122,7 @@ func SetupStudentRoute(app *fiber.App, apiVersion string) {
 		}
 
 		// activate case
-		activate := selectedData.StatusUUID == helper.DB_UUID_STATUS_INACTIVE && strings.EqualFold(payload.Status.String(), helper.DB_UUID_STATUS_ACTIVE.String())
+		activate := selectedData.StatusUUID == helper.DB_UUID_STATUS_INACTIVE && payload.Status == helper.DB_UUID_STATUS_ACTIVE
 		if activate {
 			selectedData.StatusUUID = helper.DB_UUID_STATUS_ACTIVE
 		} else {
