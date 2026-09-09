@@ -24,7 +24,7 @@ import (
 // 	return data, err
 // }
 
-func GetTNS(schoolUUID, tenantUUID, userUUID, tnsUUID uuid.UUID) (*model.TNSModel, error) {
+func GetTNS(schoolUUID, tenantUUID, tnsUUID uuid.UUID) (*model.TNSModel, error) {
 	query := `
 	select
 		s.uuid
@@ -757,15 +757,18 @@ func GetHomeroomTeacher(schoolUUID, tenantUUID uuid.UUID) ([]model.HomeroomTeach
 	SELECT
 		u.uuid,
 		u."name",
+		s.name,
 		ARRAY_AGG(DISTINCT p.name ORDER BY p.name) AS position
 	FROM user_sch."user" u
 	JOIN employee.employee e ON u.uuid = e.user_uuid
 	JOIN employee.employee_position ep ON e.uuid = ep.employee_uuid
 	JOIN public."position" p ON ep.position_uuid = p.uuid
+	join public.status s on u.status_uuid = s.uuid
 	WHERE p.is_staff = FALSE
+	and (lower(s.code) = 'active' and lower(s.category) = 'record_status')
 	AND u.tenant_uuid = $1
 	AND u.school_uuid = $2
-	GROUP by u.uuid, u."name"
+	GROUP by u.uuid, u."name", s.name
 	HAVING NOT BOOL_OR(LOWER(TRIM(p.name)) = 'wali kelas');
 	`
 	selectedDetail, err := db.GetMultipleDataByQuery[model.HomeroomTeacherModel](query, tenantUUID, schoolUUID)

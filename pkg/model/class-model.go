@@ -16,6 +16,7 @@ type ClassModel struct {
 	CreatedDate     time.Time  `db:"created_date" json:"created_date"`
 	UpdatedDate     *time.Time `db:"updated_date" json:"updated_date"`
 	TenantUUID      uuid.UUID  `db:"tenant_uuid" json:"tenant_uuid"`
+	SchoolUUID      uuid.UUID  `db:"school_uuid" json:"school_uuid"`
 }
 
 type CreateClassModel struct {
@@ -24,6 +25,7 @@ type CreateClassModel struct {
 	Level           int        `json:"level"`
 	HomeroomTeacher *uuid.UUID `json:"homeroom_teacher,omitempty"`
 	TenantUUID      *uuid.UUID `json:"tenant_uuid"`
+	SchoolUUID      *uuid.UUID `json:"school_uuid"`
 }
 
 type UpdateClassModel struct {
@@ -36,6 +38,10 @@ type UpdateClassModel struct {
 }
 
 type DeleteClassModel struct {
+	UUID uuid.UUID `json:"uuid"`
+}
+
+type ActivateClassModel struct {
 	UUID uuid.UUID `json:"uuid"`
 }
 

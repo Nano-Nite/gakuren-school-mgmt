@@ -107,7 +107,7 @@ func SetupTNSRoute(app *fiber.App, apiVersion string) {
 		}
 
 		// get data
-		selectedData, err := helper.GetTNS(schoolUUID, tenantUUID, requesterUUID, payload.UUID)
+		selectedData, err := helper.GetTNS(schoolUUID, tenantUUID, payload.UUID)
 		if err != nil {
 			return helper.ReturnResponse(c, fiber.StatusNotFound, "Teacher or staff not found", nil, err)
 		}
@@ -189,7 +189,7 @@ func SetupTNSRoute(app *fiber.App, apiVersion string) {
 		}
 
 		// get data
-		selectedData, err := helper.GetTNS(schoolUUID, tenantUUID, requesterUUID, payload.UserUUID)
+		selectedData, err := helper.GetTNS(schoolUUID, tenantUUID, payload.UserUUID)
 		if err != nil {
 			return helper.ReturnResponse(c, fiber.StatusNotFound, "Teacher or staff not found", nil, err)
 		}

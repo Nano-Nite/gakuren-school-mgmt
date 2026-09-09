@@ -183,25 +183,12 @@ func ExecuteApproval(instanceUUID, schoolUUID, tenantUUID string, actedBy, roleU
 				if err != nil {
 					return false, fmt.Errorf("convert class approval request: %w", err)
 				}
-
-				// Trust the instance tenant, not the serialized request tenant.
-				classData.TenantUUID, err = uuid.Parse(tenantUUID)
-				if err != nil {
-					return false, fmt.Errorf("invalid tenant UUID: %w", err)
-				}
-				var createdUUID uuid.UUID
-				err = tx.QueryRow(context.Background(), `
-					insert into school_sch.class
-						(name, abbr_name, level, homeroom_teacher, status_uuid, created_date, updated_date, tenant_uuid)
-					values ($1, $2, $3, $4, $5, $6, $7, $8)
-					returning uuid
-				`, classData.Name, classData.AbbrName, classData.Level, classData.HomeroomTeacher,
-					classData.StatusUUID, classData.CreatedDate, classData.UpdatedDate, classData.TenantUUID,
-				).Scan(&createdUUID)
+				err = InsertClass(*classData, parsedSchoolUUID, parsedTenantUUID)
 				if err != nil {
 					return false, fmt.Errorf("create approved class: %w", err)
 				}
-				entityUUID = &createdUUID
+
+				entityUUID = classData.UUID
 			// update
 			case strings.EqualFold(entityType, CLASS_ENTITY_TYPE) && strings.EqualFold(instanceAction, ACTION_CODE_UPDATE):
 				if instanceEntityUUID == nil {
@@ -213,39 +200,18 @@ func ExecuteApproval(instanceUUID, schoolUUID, tenantUUID string, actedBy, roleU
 					return false, fmt.Errorf("decode class approval request: %w", err)
 				}
 
-				var activeStatusUUID uuid.UUID
-				err = tx.QueryRow(context.Background(), `
-					select uuid
-					from public.status
-					where lower(name) = lower($1)
-					limit 1
-				`, STATUS_ACTIVE).Scan(&activeStatusUUID)
-				if errors.Is(err, pgx.ErrNoRows) {
-					return false, errors.New("active status is not configured")
-				}
-				if err != nil {
-					return false, fmt.Errorf("get active status: %w", err)
-				}
-
 				classData, convertErr := MapIntoStuct[model.ClassModel](mapData)
 				if convertErr != nil {
 					return false, fmt.Errorf("convert class approval request: %w", convertErr)
 				}
 
-				err = tx.QueryRow(context.Background(), `
-					update school_sch.class
-					set name = $1, abbr_name = $2, level = $3,
-					    homeroom_teacher = $4, status_uuid = $5, updated_date = now()
-					where uuid = $6 and tenant_uuid = $7
-					returning uuid
-				`, classData.Name, classData.AbbrName, classData.Level,
-					classData.HomeroomTeacher, activeStatusUUID, instanceEntityUUID, tenantUUID,
-				).Scan(instanceEntityUUID)
-				if errors.Is(err, pgx.ErrNoRows) {
-					return false, errors.New("approved class update target not found")
-				}
-				if err != nil {
+				if err = UpdateClass(*classData, parsedSchoolUUID, parsedTenantUUID); err != nil {
 					return false, fmt.Errorf("update approved class: %w", err)
+				}
+
+				classData.StatusUUID = DB_UUID_STATUS_ACTIVE
+				if err = UpdateClassStatus(*classData, classData.StatusUUID, parsedTenantUUID, parsedSchoolUUID); err != nil {
+					return false, fmt.Errorf("failed to update class status: %w", err)
 				}
 				entityUUID = instanceEntityUUID
 			// delete
@@ -254,32 +220,36 @@ func ExecuteApproval(instanceUUID, schoolUUID, tenantUUID string, actedBy, roleU
 					return false, errors.New("class delete approval is missing entity UUID")
 				}
 
-				var deleteStatusUUID uuid.UUID
-				err = tx.QueryRow(context.Background(), `
-					select uuid
-					from public.status
-					where lower(name) = lower($1)
-					limit 1
-				`, STATUS_DELETED).Scan(&deleteStatusUUID)
-				if errors.Is(err, pgx.ErrNoRows) {
-					return false, errors.New("inactive status is not configured")
-				}
-				if err != nil {
-					return false, fmt.Errorf("get inactive status: %w", err)
+				var data model.ClassModel
+				if err = json.Unmarshal(requestData, &data); err != nil {
+					return false, fmt.Errorf("decode user approval request: %w", err)
 				}
 
-				err = tx.QueryRow(context.Background(), `
-					update school_sch.class
-					set status_uuid = $1, updated_date = now()
-					where uuid = $2 and tenant_uuid = $3
-					returning uuid
-				`, deleteStatusUUID, instanceEntityUUID, tenantUUID).Scan(instanceEntityUUID)
-				if errors.Is(err, pgx.ErrNoRows) {
-					return false, errors.New("approved class delete target not found")
-				}
-				if err != nil {
+				if err = SoftDeleteClass(data, parsedTenantUUID, parsedSchoolUUID); err != nil {
 					return false, fmt.Errorf("soft-delete approved class: %w", err)
 				}
+
+				entityUUID = instanceEntityUUID
+			// activate
+			case strings.EqualFold(entityType, CLASS_ENTITY_TYPE) && strings.EqualFold(instanceAction, ACTION_CODE_ACTIVATE):
+				if instanceEntityUUID == nil {
+					return false, errors.New("class activate approval is missing entity UUID")
+				}
+
+				mapData := make(map[string]interface{})
+				if err = json.Unmarshal(requestData, &mapData); err != nil {
+					return false, fmt.Errorf("decode class approval request: %w", err)
+				}
+
+				classData, convertErr := MapIntoStuct[model.ClassModel](mapData)
+				if convertErr != nil {
+					return false, fmt.Errorf("convert class approval request: %w", convertErr)
+				}
+
+				if err = UpdateClassStatus(*classData, DB_UUID_STATUS_ACTIVE, parsedTenantUUID, parsedSchoolUUID); err != nil {
+					return false, fmt.Errorf("update approved class: %w", err)
+				}
+
 				entityUUID = instanceEntityUUID
 
 			//* Student CRUD
@@ -489,26 +459,17 @@ func ExecuteApproval(instanceUUID, schoolUUID, tenantUUID string, actedBy, roleU
 					break
 				}
 
-				var activeStatusUUID uuid.UUID
-				err = tx.QueryRow(context.Background(), `
-					select uuid
-					from public.status
-					where lower(name) = lower($1)
-					limit 1
-				`, STATUS_ACTIVE).Scan(&activeStatusUUID)
-				if errors.Is(err, pgx.ErrNoRows) {
-					return false, errors.New("active status is not configured")
-				}
-				if err != nil {
-					return false, fmt.Errorf("get active status: %w", err)
+				var data model.ClassModel
+				if err = json.Unmarshal(requestData, &data); err != nil {
+					return false, fmt.Errorf("decode user approval request: %w", err)
 				}
 
 				err = tx.QueryRow(context.Background(), `
 					update school_sch.class
 					set status_uuid = $1, updated_date = now()
-					where uuid = $2 and tenant_uuid = $3
+					where uuid = $2 and tenant_uuid = $3 and school_uuid = $4
 					returning uuid
-				`, activeStatusUUID, instanceEntityUUID, tenantUUID).Scan(instanceEntityUUID)
+				`, data.StatusUUID, instanceEntityUUID, tenantUUID, schoolUUID).Scan(instanceEntityUUID)
 				if errors.Is(err, pgx.ErrNoRows) {
 					return false, errors.New("cancel class target not found")
 				}
