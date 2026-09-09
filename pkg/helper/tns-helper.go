@@ -765,7 +765,7 @@ func GetHomeroomTeacher(schoolUUID, tenantUUID uuid.UUID) ([]model.HomeroomTeach
 	JOIN public."position" p ON ep.position_uuid = p.uuid
 	join public.status s on u.status_uuid = s.uuid
 	WHERE p.is_staff = FALSE
-	and (lower(s.code) = 'active' and lower(s.category) = 'record_status')
+	and u.status_uuid != (select uuid from public.status where lower(code) = 'inactive' and lower(category) = 'record_status')
 	AND u.tenant_uuid = $1
 	AND u.school_uuid = $2
 	GROUP by u.uuid, u."name", s.name
