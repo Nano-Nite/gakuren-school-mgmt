@@ -757,7 +757,7 @@ func GetHomeroomTeacher(schoolUUID, tenantUUID uuid.UUID) ([]model.HomeroomTeach
 	SELECT
 		u.uuid,
 		u."name",
-		s.name,
+		s.name as status,
 		ARRAY_AGG(DISTINCT p.name ORDER BY p.name) AS position
 	FROM user_sch."user" u
 	JOIN employee.employee e ON u.uuid = e.user_uuid
