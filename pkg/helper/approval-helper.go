@@ -260,7 +260,7 @@ func ExecuteApproval(instanceUUID, schoolUUID, tenantUUID string, actedBy, roleU
 					from public.status
 					where lower(name) = lower($1)
 					limit 1
-				`, STATUS_DELETE).Scan(&deleteStatusUUID)
+				`, STATUS_DELETED).Scan(&deleteStatusUUID)
 				if errors.Is(err, pgx.ErrNoRows) {
 					return false, errors.New("inactive status is not configured")
 				}
@@ -370,7 +370,7 @@ func ExecuteApproval(instanceUUID, schoolUUID, tenantUUID string, actedBy, roleU
 					update user_sch."user" set 
 						status_uuid=$1, updated_date=now()
 					where uuid=$2 and tenant_uuid=$3 returning uuid
-				`, DB_UUID_STATUS_DELETE, userData.UserUUID, tenantUUID).Scan(instanceEntityUUID)
+				`, DB_UUID_STATUS_DELETED, userData.UserUUID, tenantUUID).Scan(instanceEntityUUID)
 				if errors.Is(err, pgx.ErrNoRows) {
 					return false, errors.New("approved user update target not found")
 				}
@@ -383,7 +383,7 @@ func ExecuteApproval(instanceUUID, schoolUUID, tenantUUID string, actedBy, roleU
 					update school_sch.student set 
 						status_uuid =$1, updated_date=now()
 					where uuid=$2 returning uuid
-				`, DB_UUID_STATUS_DELETE, userData.UUID).Scan(instanceEntityUUID)
+				`, DB_UUID_STATUS_DELETED, userData.UUID).Scan(instanceEntityUUID)
 				if errors.Is(err, pgx.ErrNoRows) {
 					return false, errors.New("approved student delete target not found")
 				}

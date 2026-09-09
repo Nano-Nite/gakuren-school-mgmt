@@ -206,7 +206,7 @@ func SearchStudent(tenantUUID uuid.UUID, payload model.SearchPayload) ([]model.R
 		}
 	}
 
-	params = append(params, STATUS_DELETE)
+	params = append(params, STATUS_DELETED)
 	where += " and lower(status) != lower($" + strconv.Itoa(len(params)) + ")"
 
 	count, err := db.GetSingleDataByQuery[model.CountResult](base+" select count(*) from datas where "+where, params...)

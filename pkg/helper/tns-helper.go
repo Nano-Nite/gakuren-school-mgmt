@@ -597,7 +597,7 @@ func SearchTNSHeader(schoolUUID, tenantUUID, userUUID uuid.UUID, payload model.S
 		}
 	}
 
-	params = append(params, STATUS_DELETE)
+	params = append(params, STATUS_DELETED)
 	where += " and (lower(status_user) != lower($" + strconv.Itoa(len(params)) + ")"
 	where += " or lower(employee_status) != lower($" + strconv.Itoa(len(params)) + "))"
 
@@ -750,4 +750,33 @@ func UserTNSValidity(data model.CreateTNSModel) error {
 	}
 
 	return nil
+}
+
+func GetHomeroomTeacher(schoolUUID, tenantUUID uuid.UUID) ([]model.HomeroomTeacherModel, error) {
+	query := `
+	SELECT
+		u.uuid,
+		u."name",
+		ARRAY_AGG(DISTINCT p.name ORDER BY p.name) AS position
+	FROM user_sch."user" u
+	JOIN employee.employee e ON u.uuid = e.user_uuid
+	JOIN employee.employee_position ep ON e.uuid = ep.employee_uuid
+	JOIN public."position" p ON ep.position_uuid = p.uuid
+	WHERE p.is_staff = FALSE
+	AND u.tenant_uuid = $1
+	AND u.school_uuid = $2
+	GROUP by u.uuid, u."name"
+	HAVING NOT BOOL_OR(LOWER(TRIM(p.name)) = 'wali kelas');
+	`
+	selectedDetail, err := db.GetMultipleDataByQuery[model.HomeroomTeacherModel](query, tenantUUID, schoolUUID)
+	if err != nil {
+		if err.Error() != "no rows in result set" {
+			return nil, err
+		}
+	}
+	if selectedDetail == nil {
+		return nil, errors.New("Fail to get detail data")
+	}
+
+	return *selectedDetail, nil
 }

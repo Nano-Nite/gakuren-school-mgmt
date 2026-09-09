@@ -280,4 +280,17 @@ func SetupTNSRoute(app *fiber.App, apiVersion string) {
 		return helper.ReturnResponse(c, fiber.StatusOK, "success", result, nil)
 	})
 
+	app.Get(baseURL+"/get-homeroom-teacher", func(c fiber.Ctx) error {
+		schoolUUID, tenantUUID, _, err := helper.ValidateRequest(c)
+		if err != nil {
+			return helper.ReturnResponse(c, fiber.StatusUnauthorized, "Missing or invalid authentication data", nil, err)
+		}
+
+		result, err := helper.GetHomeroomTeacher(schoolUUID, tenantUUID)
+		if err != nil {
+			return helper.ReturnResponse(c, fiber.StatusBadRequest, "Failed to search users", nil, err)
+		}
+		return helper.ReturnResponse(c, fiber.StatusOK, "success", result, nil)
+	})
+
 }

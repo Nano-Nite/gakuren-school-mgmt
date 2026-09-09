@@ -34,7 +34,7 @@ const DEFAULT_PAGES = 1
 const STATUS_ACTIVE = "Active"
 const STATUS_INACTIVE = "Inactive"
 const STATUS_PENDING = "Pending"
-const STATUS_DELETE = "Delete"
+const STATUS_DELETED = "Deleted"
 const STATUS_NEW_USER = "New User"
 
 // ACTION CODE
@@ -77,7 +77,7 @@ const DELETE_TNS_PERMISSION = "teacherandstaff.delete"
 var DB_UUID_STATUS_ACTIVE uuid.UUID
 var DB_UUID_STATUS_PENDING uuid.UUID
 var DB_UUID_STATUS_INACTIVE uuid.UUID
-var DB_UUID_STATUS_DELETE uuid.UUID
+var DB_UUID_STATUS_DELETED uuid.UUID
 var DB_UUID_STATUS_NEWUSER uuid.UUID
 
 // ROLE NAME
@@ -95,31 +95,31 @@ func init() {
 }
 
 func InitVariableDB() {
-	activeStatus, err := GetStatusByName(STATUS_ACTIVE)
+	activeStatus, err := GetStatusByCode(STATUS_ACTIVE, "record_status")
 	if err != nil {
 		log.Fatal("Critical error loading configuration: ", err)
 	} else {
 		DB_UUID_STATUS_ACTIVE = activeStatus.UUID
 	}
-	pendingStatus, err := GetStatusByName(STATUS_PENDING)
+	pendingStatus, err := GetStatusByCode(STATUS_PENDING, "record_status")
 	if err != nil {
 		log.Fatal("Critical error loading configuration: ", err)
 	} else {
 		DB_UUID_STATUS_PENDING = pendingStatus.UUID
 	}
-	inactiveStatus, err := GetStatusByName(STATUS_INACTIVE)
+	inactiveStatus, err := GetStatusByCode(STATUS_INACTIVE, "record_status")
 	if err != nil {
 		log.Fatal("Critical error loading configuration: ", err)
 	} else {
 		DB_UUID_STATUS_INACTIVE = inactiveStatus.UUID
 	}
-	deleteStatus, err := GetStatusByName(STATUS_DELETE)
+	deleteStatus, err := GetStatusByCode(STATUS_DELETED, "approval")
 	if err != nil {
 		log.Fatal("Critical error loading configuration: ", err)
 	} else {
-		DB_UUID_STATUS_DELETE = deleteStatus.UUID
+		DB_UUID_STATUS_DELETED = deleteStatus.UUID
 	}
-	newUserStatus, err := GetStatusByName(STATUS_NEW_USER)
+	newUserStatus, err := GetStatusByCode(STATUS_NEW_USER, "user_account")
 	if err != nil {
 		log.Fatal("Critical error loading configuration: ", err)
 	} else {

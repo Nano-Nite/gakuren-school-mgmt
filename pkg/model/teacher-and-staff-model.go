@@ -133,3 +133,9 @@ type ReadTNSDetailModelResult struct {
 	Positions      []string          `db:"positions" json:"positions,omitempty"`
 	Subject        []string          `db:"subject" json:"subject,omitempty"`
 }
+
+type HomeroomTeacherModel struct {
+	UUID     uuid.UUID `db:"uuid" json:"uuid"`
+	Name     string    `db:"name" json:"name,omitempty"`
+	Position []string  `db:"position" json:"position,omitempty"`
+}

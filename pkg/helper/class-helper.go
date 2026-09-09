@@ -160,7 +160,7 @@ func SearchClass(tenantUUID string, payload model.SearchPayload) ([]model.ReadCl
 		}
 	}
 
-	param = append(param, STATUS_DELETE)
+	param = append(param, STATUS_DELETED)
 	queryBuilder += " and lower(status) != lower($" + strconv.Itoa(len(param)) + ")"
 
 	// run count first to get data statistic
