@@ -120,7 +120,7 @@ func SetupTNSRoute(app *fiber.App, apiVersion string) {
 		}
 
 		// activate case
-		activate := selectedData.StatusUser == helper.DB_UUID_STATUS_INACTIVE && *payload.StatusUserUUID == helper.DB_UUID_STATUS_ACTIVE
+		activate := selectedData.StatusUser == helper.DB_UUID_STATUS_INACTIVE && *payload.StatusUserUUID == helper.DB_UUID_STATUS_ACTIVE && payload.Activate
 		if activate {
 			*payload.StatusUserUUID = helper.DB_UUID_STATUS_ACTIVE
 		}

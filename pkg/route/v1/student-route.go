@@ -122,7 +122,7 @@ func SetupStudentRoute(app *fiber.App, apiVersion string) {
 		}
 
 		// activate case
-		activate := selectedData.StatusUUID == helper.DB_UUID_STATUS_INACTIVE && payload.Status == helper.DB_UUID_STATUS_ACTIVE
+		activate := selectedData.StatusUUID == helper.DB_UUID_STATUS_INACTIVE && payload.Status == helper.DB_UUID_STATUS_ACTIVE && payload.Activate
 		if activate {
 			selectedData.StatusUUID = helper.DB_UUID_STATUS_ACTIVE
 		} else {

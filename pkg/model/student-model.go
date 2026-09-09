@@ -19,6 +19,7 @@ type StudentModel struct {
 	ParentPhone   *string    `db:"parent_phone" json:"parent_phone,omitempty"`
 	ParentAddress *string    `db:"parent_address" json:"parent_address,omitempty"`
 	StatusUUID    uuid.UUID  `db:"status_uuid" json:"status_uuid,omitempty"`
+	Activate      bool       `db:"activate" json:"activate,omitempty"`
 }
 
 type CreateStudentModel struct {
@@ -53,6 +54,7 @@ type UpdateStudentModel struct {
 	ParentPhone   *string    `json:"parent_phone,omitempty"`
 	ParentAddress *string    `json:"parent_address,omitempty"`
 	Status        uuid.UUID  `json:"status,omitempty"`
+	Activate      bool       `json:"activate,omitempty"`
 }
 
 type DeleteStudentModel struct {

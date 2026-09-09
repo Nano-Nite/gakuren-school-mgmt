@@ -523,13 +523,30 @@ func ExecuteApproval(instanceUUID, schoolUUID, tenantUUID string, actedBy, roleU
 				if instanceEntityUUID == nil {
 					break
 				}
-				err = tx.QueryRow(context.Background(), `update school_sch.student set status_uuid=$1,updated_date=now()
-					where uuid=$2 returning uuid`, DB_UUID_STATUS_ACTIVE, instanceEntityUUID).Scan(instanceEntityUUID)
-				if errors.Is(err, pgx.ErrNoRows) {
-					return false, errors.New("cancel user target not found")
+
+				var data model.StudentModel
+				if err = json.Unmarshal(requestData, &data); err != nil {
+					return false, fmt.Errorf("decode user approval request: %w", err)
 				}
-				if err != nil {
-					return false, fmt.Errorf("cancel user approval: %w", err)
+
+				if data.Activate {
+					err = tx.QueryRow(context.Background(), `update school_sch.student set status_uuid=$1,updated_date=now()
+						where uuid=$2 returning uuid`, DB_UUID_STATUS_INACTIVE, instanceEntityUUID).Scan(instanceEntityUUID)
+					if errors.Is(err, pgx.ErrNoRows) {
+						return false, errors.New("cancel user target not found")
+					}
+					if err != nil {
+						return false, fmt.Errorf("cancel user approval: %w", err)
+					}
+				} else {
+					err = tx.QueryRow(context.Background(), `update school_sch.student set status_uuid=$1,updated_date=now()
+						where uuid=$2 returning uuid`, DB_UUID_STATUS_ACTIVE, instanceEntityUUID).Scan(instanceEntityUUID)
+					if errors.Is(err, pgx.ErrNoRows) {
+						return false, errors.New("cancel user target not found")
+					}
+					if err != nil {
+						return false, fmt.Errorf("cancel user approval: %w", err)
+					}
 				}
 				entityUUID = instanceEntityUUID
 
@@ -539,13 +556,30 @@ func ExecuteApproval(instanceUUID, schoolUUID, tenantUUID string, actedBy, roleU
 				if instanceEntityUUID == nil {
 					break
 				}
-				err = tx.QueryRow(context.Background(), `update user_sch.user set status_uuid=$1,updated_date=now()
-					where uuid=$2 returning uuid`, DB_UUID_STATUS_ACTIVE, instanceEntityUUID).Scan(instanceEntityUUID)
-				if errors.Is(err, pgx.ErrNoRows) {
-					return false, errors.New("cancel user target not found")
+
+				var data model.UpdateTNSModel
+				if err = json.Unmarshal(requestData, &data); err != nil {
+					return false, fmt.Errorf("decode user approval request: %w", err)
 				}
-				if err != nil {
-					return false, fmt.Errorf("cancel user approval: %w", err)
+
+				if data.Activate {
+					err = tx.QueryRow(context.Background(), `update user_sch.user set status_uuid=$1,updated_date=now()
+						where uuid=$2 returning uuid`, DB_UUID_STATUS_INACTIVE, instanceEntityUUID).Scan(instanceEntityUUID)
+					if errors.Is(err, pgx.ErrNoRows) {
+						return false, errors.New("cancel user target not found")
+					}
+					if err != nil {
+						return false, fmt.Errorf("cancel user approval: %w", err)
+					}
+				} else {
+					err = tx.QueryRow(context.Background(), `update user_sch.user set status_uuid=$1,updated_date=now()
+						where uuid=$2 returning uuid`, DB_UUID_STATUS_ACTIVE, instanceEntityUUID).Scan(instanceEntityUUID)
+					if errors.Is(err, pgx.ErrNoRows) {
+						return false, errors.New("cancel user target not found")
+					}
+					if err != nil {
+						return false, fmt.Errorf("cancel user approval: %w", err)
+					}
 				}
 				entityUUID = instanceEntityUUID
 			}
