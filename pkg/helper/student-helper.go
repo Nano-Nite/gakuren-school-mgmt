@@ -261,6 +261,49 @@ func SearchStudent(tenantUUID uuid.UUID, payload model.SearchPayload) ([]model.R
 	return *rows, &stats, nil
 }
 
+func SearchStudentDetail(schoolUUID, tenantUUID, userUUID, studentUUID uuid.UUID) (*model.ReadStudentModelResult, error) {
+	query := `
+	with datas as (
+		select
+			s."uuid"
+			,s.user_uuid 
+			,u."name"
+			,s.nis 
+			,s.nisn 
+			,c."name" class_name
+			,u.phone 
+			,u.email
+			,g."name" gender_name
+			,s3.name as status
+			,s2."name" student_status
+			,u.address
+			,s.parent_name 
+			,s.parent_email 
+			,s.parent_phone 
+			,s.parent_address 
+		from school_sch.student s 
+		join user_sch."user" u on s.user_uuid = u."uuid" 
+		left join school_sch."class" c on s.class_uuid = c."uuid" 
+		join public.gender g on s.gender_uuid = g."uuid" 
+		join public.status s2 on s.status_uuid = s2."uuid" 
+		join public.status s3 on u.status_uuid = s3."uuid" 
+		where u.tenant_uuid = $1 and u.school_uuid = $2
+	)
+		select * from datas where uuid = $3
+	`
+	selectedDetail, err := db.GetSingleDataByQuery[model.ReadStudentModelResult](query, tenantUUID, schoolUUID, studentUUID)
+	if err != nil {
+		if err.Error() != "no rows in result set" {
+			return nil, err
+		}
+	}
+	if selectedDetail == nil {
+		return nil, errors.New("Fail to get detail data")
+	}
+
+	return selectedDetail, nil
+}
+
 func UserStudentValidity(data model.CreateStudentModel) error {
 	checkUser, err := db.GetMultipleDataByQuery[model.UserModel](`
 	with datas as (
