@@ -39,6 +39,7 @@ func GetStudent(userUUID, tenantUUID uuid.UUID) (*model.StudentModel, error) {
 			,u.email
 			,g.uuid gender_uuid
 			,s2.uuid status_uuid
+			,u.status_uuid as status_user
 			,u.address
 			,s.parent_name 
 			,s.parent_email 

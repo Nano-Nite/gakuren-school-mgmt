@@ -13,18 +13,6 @@ import (
 	"github.com/google/uuid"
 )
 
-// func GetTenantStudent(userUUID, tenantUUID uuid.UUID) (*model.UserModel, error) {
-// 	data, err := db.GetSingleDataByQuery[model.UserModel](`
-// 		select uuid, tenant_uuid, name, email, phone, address, img_location,
-// 		       role_uuid, status_uuid, created_date, updated_date, version
-// 		from user_sch."user" where uuid = $1 and tenant_uuid = $2
-// 	`, userUUID, tenantUUID)
-// 	if errors.Is(err, pgx.ErrNoRows) {
-// 		return nil, errors.New("user not found")
-// 	}
-// 	return data, err
-// }
-
 func GetTNS(schoolUUID, tenantUUID, tnsUUID uuid.UUID) (*model.TNSModel, error) {
 	query := `
 	select

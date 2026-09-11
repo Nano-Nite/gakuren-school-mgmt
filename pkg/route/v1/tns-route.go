@@ -1,6 +1,7 @@
 package v1
 
 import (
+	"strings"
 	"time"
 
 	"gakuren-system.com/pkg/helper"
@@ -12,6 +13,7 @@ import (
 func SetupTNSRoute(app *fiber.App, apiVersion string) {
 	baseURL := apiVersion + "/school/tns"
 
+	// create
 	app.Post(baseURL+"/create", func(c fiber.Ctx) error {
 		payload := new(model.CreateTNSModel)
 		schoolUUID, tenantUUID, requesterUUID, err := helper.ValidateRequest(c)
@@ -87,6 +89,7 @@ func SetupTNSRoute(app *fiber.App, apiVersion string) {
 		return helper.ReturnResponse(c, fiber.StatusOK, "success", map[string]any{"approval_uuid": approvalUUID}, nil)
 	})
 
+	// update
 	app.Patch(baseURL+"/update", func(c fiber.Ctx) error {
 		payload := new(model.UpdateTNSModel)
 
@@ -120,10 +123,10 @@ func SetupTNSRoute(app *fiber.App, apiVersion string) {
 		}
 
 		// activate case
-		activate := selectedData.StatusUser == helper.DB_UUID_STATUS_INACTIVE && *payload.StatusUserUUID == helper.DB_UUID_STATUS_ACTIVE && payload.Activate
-		if activate {
-			*payload.StatusUserUUID = helper.DB_UUID_STATUS_ACTIVE
-		}
+		// activate := selectedData.StatusUser == helper.DB_UUID_STATUS_INACTIVE && *payload.StatusUserUUID == helper.DB_UUID_STATUS_ACTIVE
+		// if activate {
+		// 	*payload.StatusUserUUID = helper.DB_UUID_STATUS_ACTIVE
+		// }
 
 		// bypass permission check
 		canBypass, err := helper.ValidateApprovalBypass(requesterUUID)
@@ -131,11 +134,13 @@ func SetupTNSRoute(app *fiber.App, apiVersion string) {
 			return helper.ReturnResponse(c, fiber.StatusInternalServerError, "Failed to check approval bypass", nil, err)
 		}
 		operation := func() error {
-			err = helper.UpdateTNSStatus(*payload, schoolUUID, tenantUUID, *payload.StatusUserUUID)
-			if !activate {
-				return helper.UpdateTNS(*payload, tenantUUID, schoolUUID)
+			if err = helper.UpdateTNSStatus(*payload, schoolUUID, tenantUUID, *payload.StatusUserUUID); err != nil {
+				return err
 			}
-			return err
+			if err = helper.UpdateTNS(*payload, tenantUUID, schoolUUID); err != nil {
+				return err
+			}
+			return nil
 		}
 		if canBypass {
 			if err = operation(); err != nil {
@@ -169,6 +174,7 @@ func SetupTNSRoute(app *fiber.App, apiVersion string) {
 		return helper.ReturnResponse(c, fiber.StatusOK, "success", map[string]any{"uuid": payload.UUID, "approval_uuid": approvalUUID}, nil)
 	})
 
+	// delete
 	app.Delete(baseURL+"/delete", func(c fiber.Ctx) error {
 		payload := new(model.DeleteTNSModel)
 
@@ -189,21 +195,34 @@ func SetupTNSRoute(app *fiber.App, apiVersion string) {
 		}
 
 		// get data
-		selectedData, err := helper.GetTNS(schoolUUID, tenantUUID, payload.UserUUID)
+		selectedData, err := helper.SearchTNSDetail(schoolUUID, tenantUUID, requesterUUID, payload.UserUUID)
 		if err != nil {
 			return helper.ReturnResponse(c, fiber.StatusNotFound, "Teacher or staff not found", nil, err)
 		}
 
 		// status validation
-		if selectedData.StatusUser != helper.DB_UUID_STATUS_NEWUSER {
-			if selectedData.StatusUser != helper.DB_UUID_STATUS_ACTIVE {
+		newUserStatus, err := helper.GetStatusByName(helper.STATUS_NEW_USER)
+		if err != nil {
+			return helper.ReturnResponse(c, fiber.StatusInternalServerError, "Failed to get user status", nil, err)
+		}
+		activeStatus, err := helper.GetStatusByName(helper.STATUS_ACTIVE)
+		if err != nil {
+			return helper.ReturnResponse(c, fiber.StatusInternalServerError, "Failed to get user status", nil, err)
+		}
+		selectedDataStatus, err := helper.GetStatusByName(selectedData.StatusUser)
+		if err != nil {
+			return helper.ReturnResponse(c, fiber.StatusInternalServerError, "Failed to get user status", nil, err)
+		}
+		if strings.EqualFold(selectedData.StatusUser, newUserStatus.Name) {
+			if strings.EqualFold(selectedData.StatusUser, activeStatus.Name) {
 				return helper.ReturnResponse(c, fiber.StatusConflict, "Delete rejected because user is not active", nil, nil)
 			}
 		}
 
 		selectedDataModel := model.UpdateTNSModel{
-			UUID:         selectedData.UUID,
-			EmployeeUUID: selectedData.EmployeeUUID,
+			UUID:           selectedData.UUID,
+			EmployeeUUID:   selectedData.EmployeeUUID,
+			StatusUserUUID: &selectedDataStatus.UUID,
 		}
 
 		// bypass check
@@ -232,7 +251,7 @@ func SetupTNSRoute(app *fiber.App, apiVersion string) {
 			return helper.ReturnResponse(c, fiber.StatusOK, "success", payload, nil)
 		}
 
-		approvalUUID, err := helper.CreateApproval(*workflow, schoolUUID, tenantUUID, requesterUUID, &payload.UserUUID, helper.ACTION_CODE_DELETE, helper.TNS_ENTITY_TYPE, helper.TNS_MODULE_CODE, selectedData)
+		approvalUUID, err := helper.CreateApproval(*workflow, schoolUUID, tenantUUID, requesterUUID, &payload.UserUUID, helper.ACTION_CODE_DELETE, helper.TNS_ENTITY_TYPE, helper.TNS_MODULE_CODE, selectedDataModel)
 		if err != nil {
 			return helper.ReturnResponse(c, fiber.StatusInternalServerError, "Failed to create user delete approval", nil, err)
 		}
@@ -244,6 +263,82 @@ func SetupTNSRoute(app *fiber.App, apiVersion string) {
 		return helper.ReturnResponse(c, fiber.StatusOK, "success", map[string]any{"uuid": payload.UserUUID, "approval_uuid": approvalUUID}, nil)
 	})
 
+	// activate
+	app.Patch(baseURL+"/activate", func(c fiber.Ctx) error {
+		payload := new(model.ActivateTNSModel)
+		schoolUUID, tenantUUID, userUUID, err := helper.ValidateRequest(c)
+		if err != nil {
+			return helper.ReturnResponse(c, fiber.StatusUnauthorized, "Missing or invalid authentication data", nil, err)
+		}
+		if err = c.Bind().Body(payload); err != nil || payload.UserUUID == uuid.Nil {
+			return helper.ReturnResponse(c, fiber.StatusBadRequest, "Invalid request body format", nil, err)
+		}
+		if payload.EmployeeUUID == uuid.Nil {
+			return helper.ReturnResponse(c, fiber.StatusBadRequest, "Employee UUID is required", nil, nil)
+		}
+		if ok, permissionErr := helper.GetUserPermission(userUUID.String(), helper.UPDATE_TNS_PERMISSION); permissionErr != nil || !ok {
+			return helper.ReturnResponse(c, fiber.StatusUnauthorized, "Access Denied", nil, permissionErr)
+		}
+
+		// get data
+		data, err := helper.GetTNS(schoolUUID, tenantUUID, payload.UserUUID)
+		if err != nil {
+			return helper.ReturnResponse(c, fiber.StatusNotFound, "Teacher or Staff not found", nil, err)
+		}
+
+		// status check
+		if data.StatusUser == helper.DB_UUID_STATUS_PENDING && data.StatusUser != helper.DB_UUID_STATUS_INACTIVE {
+			return helper.ReturnResponse(c, fiber.StatusInternalServerError, "Update rejected due current status is pending", nil, err)
+		}
+
+		selectedDataModel := model.UpdateTNSModel{
+			UUID:           data.UUID,
+			EmployeeUUID:   data.EmployeeUUID,
+			StatusUserUUID: &data.StatusUser,
+		}
+
+		// bypass check
+		canBypass, bypassErr := helper.ApprovalBypass(userUUID.String())
+		if bypassErr != nil && bypassErr.Error() != "no rows in result set" {
+			return helper.ReturnResponse(c, fiber.StatusInternalServerError, "Internal server error, try again in a while", nil, bypassErr)
+		}
+		if canBypass {
+			if err = helper.UpdateTNSStatus(selectedDataModel, schoolUUID, tenantUUID, helper.DB_UUID_STATUS_ACTIVE); err != nil {
+				return helper.ReturnResponse(c, fiber.StatusInternalServerError, "Failed to update teacher or staff", nil, err)
+			}
+			return helper.ReturnResponse(c, fiber.StatusOK, "success", payload, nil)
+		}
+
+		workflow, workflowErr := helper.DetermineWorkflowApproval(schoolUUID.String(), tenantUUID.String(), userUUID.String(), helper.UPDATE_TNS_PERMISSION, helper.ACTION_CODE_UPDATE, helper.DB_UUID_STATUS_ACTIVE.String())
+		if workflowErr != nil && workflowErr.Error() != "no rows in result set" {
+			return helper.ReturnResponse(c, fiber.StatusInternalServerError, "Failed to determine approval workflow", nil, workflowErr)
+		}
+		if workflow == nil {
+			if err = helper.ExecuteWorkflowFallback(func() error {
+				if err = helper.UpdateTNSStatus(selectedDataModel, schoolUUID, tenantUUID, helper.DB_UUID_STATUS_ACTIVE); err != nil {
+					return err
+				}
+				return nil
+			}); err != nil {
+				return helper.ReturnResponse(c, fiber.StatusInternalServerError, "Update rejected by workflow configuration", nil, err)
+			}
+			return helper.ReturnResponse(c, fiber.StatusOK, "success", payload, nil)
+		}
+
+		instanceUUID, err := helper.CreateApproval(*workflow, schoolUUID, tenantUUID, userUUID, &payload.UserUUID, helper.ACTION_CODE_ACTIVATE, helper.TNS_ENTITY_TYPE, helper.TNS_MODULE_CODE, selectedDataModel)
+		if err != nil {
+			return helper.ReturnResponse(c, fiber.StatusInternalServerError, "Failed to create user approval", nil, err)
+		}
+
+		// update status data
+		if err = helper.UpdateTNSStatus(selectedDataModel, schoolUUID, tenantUUID, helper.DB_UUID_STATUS_PENDING); err != nil {
+			return helper.ReturnResponse(c, fiber.StatusInternalServerError, "Failed make status inactive", nil, err)
+		}
+
+		return helper.ReturnResponse(c, fiber.StatusOK, "success", map[string]any{"uuid": payload.UserUUID, "approval_uuid": instanceUUID}, nil)
+	})
+
+	// search
 	app.Post(baseURL+"/get", func(c fiber.Ctx) error {
 		payload := new(model.SearchPayload)
 		schoolUUID, tenantUUID, userUUID, err := helper.ValidateRequest(c)
@@ -260,6 +355,7 @@ func SetupTNSRoute(app *fiber.App, apiVersion string) {
 		return helper.ReturnResponse(c, fiber.StatusOK, "success", map[string]any{"data_statistic": stats, "result": data}, nil)
 	})
 
+	// get detail
 	app.Get(baseURL+"/get", func(c fiber.Ctx) error {
 		tnsUUIDQuery := c.Query("uuid")
 
@@ -280,6 +376,7 @@ func SetupTNSRoute(app *fiber.App, apiVersion string) {
 		return helper.ReturnResponse(c, fiber.StatusOK, "success", result, nil)
 	})
 
+	// get homeroom teacher
 	app.Get(baseURL+"/get-homeroom-teacher", func(c fiber.Ctx) error {
 		schoolUUID, tenantUUID, _, err := helper.ValidateRequest(c)
 		if err != nil {

@@ -19,7 +19,7 @@ type StudentModel struct {
 	ParentPhone   *string    `db:"parent_phone" json:"parent_phone,omitempty"`
 	ParentAddress *string    `db:"parent_address" json:"parent_address,omitempty"`
 	StatusUUID    uuid.UUID  `db:"status_uuid" json:"status_uuid,omitempty"`
-	Activate      bool       `db:"activate" json:"activate,omitempty"`
+	StatusUser    uuid.UUID  `db:"status_user" json:"status_user,omitempty"`
 }
 
 type CreateStudentModel struct {

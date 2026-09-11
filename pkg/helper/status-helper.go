@@ -6,7 +6,7 @@ import (
 )
 
 func GetStatusByName(name string) (*model.StatusModel, error) {
-	selectedStatus, err := db.GetSingleDataByQuery[model.StatusModel]("select * from public.status where lower(name) = lower($1)", name)
+	selectedStatus, err := db.GetSingleDataByQuery[model.StatusModel]("select * from public.status where lower(name) = lower($1) limit 1", name)
 	if err != nil {
 		return nil, err
 	}

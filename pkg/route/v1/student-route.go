@@ -121,29 +121,23 @@ func SetupStudentRoute(app *fiber.App, apiVersion string) {
 		}
 
 		// pending data check
-		if selectedData.StatusUUID == helper.DB_UUID_STATUS_PENDING && selectedData.StatusUUID != helper.DB_UUID_STATUS_INACTIVE {
+		if selectedData.StatusUser == helper.DB_UUID_STATUS_PENDING && selectedData.StatusUser != helper.DB_UUID_STATUS_INACTIVE {
 			return helper.ReturnResponse(c, fiber.StatusConflict, "Update rejected because user has a pending action", nil, nil)
 		}
 
-		// activate case
-		activate := selectedData.StatusUUID == helper.DB_UUID_STATUS_INACTIVE && payload.Status == helper.DB_UUID_STATUS_ACTIVE && payload.Activate
-		if activate {
-			selectedData.StatusUUID = helper.DB_UUID_STATUS_ACTIVE
-		} else {
-			selectedData.UUID = payload.UUID
-			selectedData.Name = payload.Name
-			selectedData.NIS = payload.NIS
-			selectedData.NISN = payload.NISN
-			selectedData.Phone = payload.Phone
-			selectedData.Email = payload.Email
-			selectedData.ClassUUID = payload.ClassUUID
-			selectedData.Address = payload.Address
-			selectedData.GenderUUID = payload.GenderUUID
-			selectedData.ParentName = payload.ParentName
-			selectedData.ParentEmail = payload.ParentEmail
-			selectedData.ParentPhone = payload.ParentPhone
-			selectedData.ParentAddress = payload.ParentAddress
-		}
+		selectedData.UUID = payload.UUID
+		selectedData.Name = payload.Name
+		selectedData.NIS = payload.NIS
+		selectedData.NISN = payload.NISN
+		selectedData.Phone = payload.Phone
+		selectedData.Email = payload.Email
+		selectedData.ClassUUID = payload.ClassUUID
+		selectedData.Address = payload.Address
+		selectedData.GenderUUID = payload.GenderUUID
+		selectedData.ParentName = payload.ParentName
+		selectedData.ParentEmail = payload.ParentEmail
+		selectedData.ParentPhone = payload.ParentPhone
+		selectedData.ParentAddress = payload.ParentAddress
 
 		// bypass permission check
 		canBypass, err := helper.ValidateApprovalBypass(requesterUUID)
@@ -151,8 +145,8 @@ func SetupStudentRoute(app *fiber.App, apiVersion string) {
 			return helper.ReturnResponse(c, fiber.StatusInternalServerError, "Failed to check approval bypass", nil, err)
 		}
 		operation := func() error {
-			if activate {
-				return helper.UpdateStudentUserStatus(*selectedData, tenantUUID, payload.Status)
+			if err := helper.UpdateStudentUserStatus(*selectedData, tenantUUID, payload.Status); err != nil {
+				return err
 			}
 			return helper.UpdateStudent(*selectedData)
 		}
@@ -215,7 +209,7 @@ func SetupStudentRoute(app *fiber.App, apiVersion string) {
 		}
 
 		// status validation
-		if selectedData.StatusUUID == helper.DB_UUID_STATUS_INACTIVE {
+		if selectedData.StatusUser == helper.DB_UUID_STATUS_INACTIVE || selectedData.StatusUser == helper.DB_UUID_STATUS_PENDING {
 			return helper.ReturnResponse(c, fiber.StatusConflict, "Delete rejected because user is already inactive", nil, nil)
 		}
 
@@ -280,7 +274,7 @@ func SetupStudentRoute(app *fiber.App, apiVersion string) {
 		}
 
 		// status check
-		if studentData.StatusUUID == helper.DB_UUID_STATUS_PENDING && studentData.StatusUUID != helper.DB_UUID_STATUS_INACTIVE {
+		if studentData.StatusUser == helper.DB_UUID_STATUS_PENDING || studentData.StatusUser != helper.DB_UUID_STATUS_INACTIVE {
 			return helper.ReturnResponse(c, fiber.StatusInternalServerError, "Update rejected due current status is pending", nil, err)
 		}
 
@@ -290,10 +284,7 @@ func SetupStudentRoute(app *fiber.App, apiVersion string) {
 			return helper.ReturnResponse(c, fiber.StatusInternalServerError, "Internal server error, try again in a while", nil, bypassErr)
 		}
 		if canBypass {
-			if err = helper.UpdateStudentUserStatus(*studentData, helper.DB_UUID_STATUS_ACTIVE, tenantUUID); err != nil {
-				return helper.ReturnResponse(c, fiber.StatusInternalServerError, "Failed to update student", nil, err)
-			}
-			if err = helper.UpdateStudentStatus(*studentData, helper.DB_UUID_STUDENT_ENROLLMENT_ACTIVE, tenantUUID); err != nil {
+			if err = helper.UpdateStudentUserStatus(*studentData, tenantUUID, helper.DB_UUID_STATUS_ACTIVE); err != nil {
 				return helper.ReturnResponse(c, fiber.StatusInternalServerError, "Failed to update student", nil, err)
 			}
 			return helper.ReturnResponse(c, fiber.StatusOK, "success", payload, nil)
@@ -305,10 +296,7 @@ func SetupStudentRoute(app *fiber.App, apiVersion string) {
 		}
 		if workflow == nil {
 			if err = helper.ExecuteWorkflowFallback(func() error {
-				if err = helper.UpdateStudentUserStatus(*studentData, helper.DB_UUID_STATUS_ACTIVE, tenantUUID); err != nil {
-					return err
-				}
-				if err = helper.UpdateStudentStatus(*studentData, helper.DB_UUID_STUDENT_ENROLLMENT_ACTIVE, tenantUUID); err != nil {
+				if err = helper.UpdateStudentUserStatus(*studentData, tenantUUID, helper.DB_UUID_STATUS_ACTIVE); err != nil {
 					return err
 				}
 				return nil
@@ -324,8 +312,7 @@ func SetupStudentRoute(app *fiber.App, apiVersion string) {
 		}
 
 		// update status data
-		studentData.StatusUUID = helper.DB_UUID_STATUS_PENDING
-		if err = helper.UpdateStudentUserStatus(*studentData, tenantUUID, studentData.StatusUUID); err != nil {
+		if err = helper.UpdateStudentUserStatus(*studentData, tenantUUID, helper.DB_UUID_STATUS_PENDING); err != nil {
 			return helper.ReturnResponse(c, fiber.StatusInternalServerError, "Failed make status inactive", nil, err)
 		}
 

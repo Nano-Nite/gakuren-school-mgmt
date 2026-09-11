@@ -86,7 +86,6 @@ type UpdateTNSModel struct {
 	UpdatedDate        *time.Time            `db:"updated_date" json:"updated_date,omitempty"`
 	StatusUserUUID     *uuid.UUID            `db:"status_user" json:"status_user,omitempty"`
 	EmployeeStatusUUID uuid.UUID             `db:"employee_status" json:"employee_status,omitempty"`
-	Activate           bool                  `db:"activate" json:"activate,omitempty"`
 }
 
 type DeleteTNSModel struct {
@@ -97,7 +96,6 @@ type DeleteTNSModel struct {
 type ActivateTNSModel struct {
 	UserUUID     uuid.UUID `json:"user_uuid"`
 	EmployeeUUID uuid.UUID `json:"employee_uuid"`
-	Activate     bool      `json:"activate"`
 }
 
 type ReadTNSHeaderModelResult struct {
