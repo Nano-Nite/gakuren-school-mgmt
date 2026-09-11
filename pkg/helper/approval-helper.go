@@ -259,10 +259,6 @@ func ExecuteApproval(instanceUUID, schoolUUID, tenantUUID string, actedBy, roleU
 				if err = json.Unmarshal(requestData, &studenData); err != nil {
 					return false, fmt.Errorf("decode user approval request: %w", err)
 				}
-				parsedTenantUUID, err := uuid.Parse(tenantUUID)
-				if err != nil {
-					return false, fmt.Errorf("invalid tenant UUID: %w", err)
-				}
 				studentRole, err := GetRoleByAbbrName(ROLE_STUDENT)
 				if err != nil {
 					return false, fmt.Errorf("role not found: %w", err)
@@ -275,17 +271,18 @@ func ExecuteApproval(instanceUUID, schoolUUID, tenantUUID string, actedBy, roleU
 					Phone:      studenData.Phone,
 					Address:    studenData.Address,
 					RoleUUID:   studentRole.UUID,
-					StatusUUID: DB_UUID_STATUS_ACTIVE,
+					SchoolUUID: parsedSchoolUUID,
+					StatusUUID: DB_UUID_STATUS_NEWUSER,
 				}
 
 				id, insertErr := InsertUserStudent(userData)
 				if insertErr != nil {
-					return false, nil
+					return false, insertErr
 				}
 
 				createUUID, err := InsertStudent(studenData, *id, DB_UUID_STATUS_ACTIVE)
 				if err != nil {
-					return false, nil
+					return false, err
 				}
 
 				entityUUID = createUUID
@@ -294,35 +291,18 @@ func ExecuteApproval(instanceUUID, schoolUUID, tenantUUID string, actedBy, roleU
 				if instanceEntityUUID == nil {
 					return false, errors.New("user update approval is missing entity UUID")
 				}
-				var userData model.StudentModel
-				if err = json.Unmarshal(requestData, &userData); err != nil {
+				var data model.StudentModel
+				if err = json.Unmarshal(requestData, &data); err != nil {
 					return false, fmt.Errorf("decode user approval request: %w", err)
 				}
 
-				// update user tabel first
-				err = tx.QueryRow(context.Background(), `
-					update user_sch."user" set 
-						name=$1 , phone=$2, address=$3, updated_date=now()
-					where uuid=$5 and tenant_uuid=$6 returning uuid
-				`, userData.Name, userData.Phone, userData.Address, userData.UserUUID, tenantUUID).Scan(instanceEntityUUID)
-				if errors.Is(err, pgx.ErrNoRows) {
-					return false, errors.New("approved user update target not found")
-				}
-				if err != nil {
+				// update user and student table
+				if err = UpdateStudent(data); err != nil {
 					return false, fmt.Errorf("update approved user: %w", err)
 				}
-
-				// then update student table
-				err = tx.QueryRow(context.Background(), `
-					update school_sch.student set 
-						gender_uuid=$1, class_uuid=$2, nis=$3, nisn=$4, status_uuid =$5, updated_date=now()
-					where uuid=$6 returning uuid
-				`, userData.GenderUUID, userData.ClassUUID, userData.NIS, userData.NISN, userData.StatusUUID, userData.UUID).Scan(instanceEntityUUID)
-				if errors.Is(err, pgx.ErrNoRows) {
-					return false, errors.New("approved student update target not found")
-				}
-				if err != nil {
-					return false, fmt.Errorf("update approved user: %w", err)
+				// update user status
+				if err = UpdateStudentUserStatus(data, parsedTenantUUID, DB_UUID_STATUS_ACTIVE); err != nil {
+					return false, fmt.Errorf("update approved user status: %w", err)
 				}
 
 				entityUUID = instanceEntityUUID
@@ -335,33 +315,36 @@ func ExecuteApproval(instanceUUID, schoolUUID, tenantUUID string, actedBy, roleU
 				if err = json.Unmarshal(requestData, &userData); err != nil {
 					return false, fmt.Errorf("decode user approval request: %w", err)
 				}
-				// update user tabel first
-				err = tx.QueryRow(context.Background(), `
-					update user_sch."user" set 
-						status_uuid=$1, updated_date=now()
-					where uuid=$2 and tenant_uuid=$3 returning uuid
-				`, DB_UUID_STATUS_DELETED, userData.UserUUID, tenantUUID).Scan(instanceEntityUUID)
-				if errors.Is(err, pgx.ErrNoRows) {
-					return false, errors.New("approved user update target not found")
-				}
-				if err != nil {
-					return false, fmt.Errorf("update approved student: %w", err)
+
+				if err = SoftDeleteStudent(userData, parsedTenantUUID); err != nil {
+					return false, fmt.Errorf("soft delete student: %w", err)
 				}
 
-				// then update student table
-				err = tx.QueryRow(context.Background(), `
-					update school_sch.student set 
-						status_uuid =$1, updated_date=now()
-					where uuid=$2 returning uuid
-				`, DB_UUID_STATUS_DELETED, userData.UUID).Scan(instanceEntityUUID)
-				if errors.Is(err, pgx.ErrNoRows) {
-					return false, errors.New("approved student delete target not found")
-				}
-				if err != nil {
-					return false, fmt.Errorf("delete approved user: %w", err)
-				}
 				entityUUID = instanceEntityUUID
+			// activate
+			case strings.EqualFold(entityType, STUDENT_ENTITY_TYPE) && strings.EqualFold(instanceAction, ACTION_CODE_ACTIVATE):
+				if instanceEntityUUID == nil {
+					return false, errors.New("student activate approval is missing entity UUID")
+				}
 
+				mapData := make(map[string]interface{})
+				if err = json.Unmarshal(requestData, &mapData); err != nil {
+					return false, fmt.Errorf("decode student approval request: %w", err)
+				}
+
+				studentData, convertErr := MapIntoStuct[model.StudentModel](mapData)
+				if convertErr != nil {
+					return false, fmt.Errorf("convert student approval request: %w", convertErr)
+				}
+
+				if err = UpdateStudentUserStatus(*studentData, parsedTenantUUID, DB_UUID_STATUS_ACTIVE); err != nil {
+					return false, fmt.Errorf("update user student status: %w", err)
+				}
+				if err = UpdateStudentStatus(*studentData, parsedTenantUUID, DB_UUID_STUDENT_ENROLLMENT_ACTIVE); err != nil {
+					return false, fmt.Errorf("update student status: %w", err)
+				}
+
+				entityUUID = instanceEntityUUID
 			//* Teacher and Staff CRUD
 			// create
 			case strings.EqualFold(entityType, TNS_ENTITY_TYPE) && strings.EqualFold(instanceAction, ACTION_CODE_CREATE):
@@ -395,6 +378,7 @@ func ExecuteApproval(instanceUUID, schoolUUID, tenantUUID string, actedBy, roleU
 
 				userData := model.UserModel{
 					TenantUUID: parsedTenantUUID,
+					SchoolUUID: parsedSchoolUUID,
 					Name:       &data.Biodata.Fullname,
 					Email:      &data.Biodata.Email,
 					Phone:      &data.Biodata.Phone,
@@ -405,7 +389,7 @@ func ExecuteApproval(instanceUUID, schoolUUID, tenantUUID string, actedBy, roleU
 
 				id, insertErr := InsertTNS(data, userData, parsedTenantUUID, parsedSchoolUUID)
 				if insertErr != nil {
-					return false, nil
+					return false, insertErr
 				}
 
 				entityUUID = id

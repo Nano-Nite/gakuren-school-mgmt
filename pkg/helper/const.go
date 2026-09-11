@@ -81,6 +81,18 @@ var DB_UUID_STATUS_INACTIVE uuid.UUID
 var DB_UUID_STATUS_DELETED uuid.UUID
 var DB_UUID_STATUS_NEWUSER uuid.UUID
 
+var DB_UUID_STUDENT_ENROLLMENT_REGISTERED uuid.UUID
+var DB_UUID_STUDENT_ENROLLMENT_ACTIVE uuid.UUID
+var DB_UUID_STUDENT_ENROLLMENT_ON_LEAVE uuid.UUID
+var DB_UUID_STUDENT_ENROLLMENT_SUSPENDED uuid.UUID
+var DB_UUID_STUDENT_ENROLLMENT_INACTIVE uuid.UUID
+var DB_UUID_STUDENT_ENROLLMENT_TRANSFERRED_OUT uuid.UUID
+var DB_UUID_STUDENT_ENROLLMENT_WITHDRAWN uuid.UUID
+var DB_UUID_STUDENT_ENROLLMENT_DROPPED_OUT uuid.UUID
+var DB_UUID_STUDENT_ENROLLMENT_EXPELLED uuid.UUID
+var DB_UUID_STUDENT_ENROLLMENT_GRADUATED uuid.UUID
+var DB_UUID_STUDENT_ENROLLMENT_DECEASED uuid.UUID
+
 // ROLE NAME
 const ROLE_STAFF_TU = "STAFF_TU"
 const ROLE_WAKA_KUR = "WAKASEK_KURIKULUM"
@@ -88,6 +100,19 @@ const ROLE_KEPSEK = "KEPALA_SEKOLAH"
 const ROLE_STUDENT = "SISWA"
 const ROLE_TEACHER = "GURU"
 const ROLE_STAFF = "STAFF"
+
+// STUDENT ENROLLMENT STATUS
+const STUDENT_ENROLLMENT_STATUS_REGISTERED = "registered"
+const STUDENT_ENROLLMENT_STATUS_ACTIVE = "active"
+const STUDENT_ENROLLMENT_STATUS_ON_LEAVE = "on_leave"
+const STUDENT_ENROLLMENT_STATUS_SUSPENDED = "suspended"
+const STUDENT_ENROLLMENT_STATUS_INACTIVE = "inactive"
+const STUDENT_ENROLLMENT_STATUS_TRANSFERRED_OUT = "transferred_out"
+const STUDENT_ENROLLMENT_STATUS_WITHDRAWN = "withdrawn"
+const STUDENT_ENROLLMENT_STATUS_DROPPED_OUT = "dropped_out"
+const STUDENT_ENROLLMENT_STATUS_EXPELLED = "expelled"
+const STUDENT_ENROLLMENT_STATUS_GRADUATED = "graduated"
+const STUDENT_ENROLLMENT_STATUS_DECEASED = "deceased"
 
 func init() {
 	if API_VERSION == "" {
@@ -128,4 +153,75 @@ func InitVariableDB() {
 	}
 
 	log.Println("Variable Loaded")
+}
+
+func InitStudentEnrollmentStatus() {
+	registeredStatus, err := GetUserStatus(STUDENT_ENROLLMENT_STATUS_REGISTERED)
+	if err != nil {
+		log.Fatal("Critical error loading configuration: ", err)
+	} else {
+		DB_UUID_STUDENT_ENROLLMENT_REGISTERED = *registeredStatus
+	}
+	activeStatus, err := GetUserStatus(STUDENT_ENROLLMENT_STATUS_ACTIVE)
+	if err != nil {
+		log.Fatal("Critical error loading configuration: ", err)
+	} else {
+		DB_UUID_STUDENT_ENROLLMENT_ACTIVE = *activeStatus
+	}
+	onLeaveStatus, err := GetUserStatus(STUDENT_ENROLLMENT_STATUS_ON_LEAVE)
+	if err != nil {
+		log.Fatal("Critical error loading configuration: ", err)
+	} else {
+		DB_UUID_STUDENT_ENROLLMENT_ON_LEAVE = *onLeaveStatus
+	}
+	suspendedStatus, err := GetUserStatus(STUDENT_ENROLLMENT_STATUS_SUSPENDED)
+	if err != nil {
+		log.Fatal("Critical error loading configuration: ", err)
+	} else {
+		DB_UUID_STUDENT_ENROLLMENT_SUSPENDED = *suspendedStatus
+	}
+	inactiveStatus, err := GetUserStatus(STUDENT_ENROLLMENT_STATUS_INACTIVE)
+	if err != nil {
+		log.Fatal("Critical error loading configuration: ", err)
+	} else {
+		DB_UUID_STUDENT_ENROLLMENT_INACTIVE = *inactiveStatus
+	}
+	transferredOutStatus, err := GetUserStatus(STUDENT_ENROLLMENT_STATUS_TRANSFERRED_OUT)
+	if err != nil {
+		log.Fatal("Critical error loading configuration: ", err)
+	} else {
+		DB_UUID_STUDENT_ENROLLMENT_TRANSFERRED_OUT = *transferredOutStatus
+	}
+	withdrawnStatus, err := GetUserStatus(STUDENT_ENROLLMENT_STATUS_WITHDRAWN)
+	if err != nil {
+		log.Fatal("Critical error loading configuration: ", err)
+	} else {
+		DB_UUID_STUDENT_ENROLLMENT_WITHDRAWN = *withdrawnStatus
+	}
+	droppedOutStatus, err := GetUserStatus(STUDENT_ENROLLMENT_STATUS_DROPPED_OUT)
+	if err != nil {
+		log.Fatal("Critical error loading configuration: ", err)
+	} else {
+		DB_UUID_STUDENT_ENROLLMENT_DROPPED_OUT = *droppedOutStatus
+	}
+	expelledStatus, err := GetUserStatus(STUDENT_ENROLLMENT_STATUS_EXPELLED)
+	if err != nil {
+		log.Fatal("Critical error loading configuration: ", err)
+	} else {
+		DB_UUID_STUDENT_ENROLLMENT_EXPELLED = *expelledStatus
+	}
+	graduatedStatus, err := GetUserStatus(STUDENT_ENROLLMENT_STATUS_GRADUATED)
+	if err != nil {
+		log.Fatal("Critical error loading configuration: ", err)
+	} else {
+		DB_UUID_STUDENT_ENROLLMENT_GRADUATED = *graduatedStatus
+	}
+	deceasedStatus, err := GetUserStatus(STUDENT_ENROLLMENT_STATUS_DECEASED)
+	if err != nil {
+		log.Fatal("Critical error loading configuration: ", err)
+	} else {
+		DB_UUID_STUDENT_ENROLLMENT_DECEASED = *deceasedStatus
+	}
+
+	log.Println("Student Enrollment Status Variable Loaded")
 }

@@ -16,6 +16,9 @@ func main() {
 	// Init DB Variable
 	helper.InitVariableDB()
 
+	// Init Student Enrollment Status
+	helper.InitStudentEnrollmentStatus()
+
 	// Run JWT Service
 	// log.Println("Starting JWT Service")
 	// if err := auth.NewJWTService(); err != nil {

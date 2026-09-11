@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"time"
 
 	"gakuren-system.com/pkg/db"
 	"gakuren-system.com/pkg/model"
@@ -65,7 +66,7 @@ func InsertUserStudent(data model.UserModel) (*uuid.UUID, error) {
 		values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
 		returning uuid
 	`, data.TenantUUID, data.Name, data.Email, data.Phone, data.Address,
-		data.ImgLocation, data.RoleUUID, data.StatusUUID, data.CreatedDate,
+		data.ImgLocation, data.RoleUUID, data.StatusUUID, time.Now(),
 		data.UpdatedDate, data.Version, data.SchoolUUID).Scan(&id)
 	if err != nil {
 		return nil, fmt.Errorf("insert user: %w", err)
@@ -78,12 +79,12 @@ func InsertStudent(data model.CreateStudentModel, userUUID, status uuid.UUID) (*
 	err := db.Conn.QueryRow(context.Background(), `
 		INSERT INTO school_sch.student
 		(user_uuid, gender_uuid, class_uuid, nis, nisn, status_uuid,
-		parent_name,parent_phone,parent_email,parent_address)
+		parent_name,parent_phone,parent_email,parent_address, school_uuid)
 		VALUES 
-		($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+		($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
 		returning uuid
 	`, userUUID, data.GenderUUID, data.ClassUUID, data.NIS, data.NISN, status,
-		data.ParentName, data.ParentPhone, data.ParentEmail, data.ParentAddress).Scan(&id)
+		data.ParentName, data.ParentPhone, data.ParentEmail, data.ParentAddress, data.SchoolUUID).Scan(&id)
 	if err != nil {
 		return nil, fmt.Errorf("insert student: %w", err)
 	}
@@ -110,16 +111,16 @@ func UpdateStudent(data model.StudentModel) error {
 	}
 	resultUpdateStudent, err := tx.Exec(context.Background(), `
 		update school_sch.student
-			set gender_uuid=$1, class_uuid=$2, nis=$3, nisn=$4, status_uuid=$5, updated_date = now(),
-			parent_name = $6, parent_email = $7, parent_phone = $8, parent_address = $9
-		where uuid=$10
-	`, data.GenderUUID, data.ClassUUID, data.NIS, data.NISN, data.StatusUUID,
+			set gender_uuid=$1, class_uuid=$2, nis=$3, nisn=$4, updated_date = now(),
+			parent_name = $5, parent_email = $6, parent_phone = $7, parent_address = $8
+		where uuid=$9
+	`, data.GenderUUID, data.ClassUUID, data.NIS, data.NISN,
 		data.ParentName, data.ParentEmail, data.ParentPhone, data.ParentAddress, data.UUID)
 	if err != nil {
-		return fmt.Errorf("update user: %w", err)
+		return fmt.Errorf("update student: %w", err)
 	}
 	if resultUpdateStudent.RowsAffected() == 0 {
-		return errors.New("user not found")
+		return errors.New("student not found")
 	}
 	return tx.Commit(context.Background())
 }
@@ -131,32 +132,45 @@ func UpdateStudentStatus(data model.StudentModel, tenantUUID, statusUUID uuid.UU
 	}
 	defer tx.Rollback(context.Background())
 
-	//! we will think about it later, do we need to make user disabled too or not.
-	//! when user inactive during pending student status, they probably cannot login
-	// result1, err := tx.Exec(context.Background(), `
-	// 	update user_sch."user" set status_uuid=$1, updated_date=now() where uuid=$2 and tenant_uuid=$3
-	// `, statusUUID, data.UserUUID, tenantUUID)
-	// if err != nil {
-	// 	return fmt.Errorf("update user status: %w", err)
-	// }
-	// if result1.RowsAffected() == 0 {
-	// 	return errors.New("user not found")
-	// }
-
 	result2, err := tx.Exec(context.Background(), `
 		update school_sch.student set status_uuid=$1, updated_date=now() where uuid=$2
 	`, statusUUID, data.UUID)
 	if err != nil {
-		return fmt.Errorf("update user status: %w", err)
+		return fmt.Errorf("update student status: %w", err)
 	}
 	if result2.RowsAffected() == 0 {
+		return errors.New("student not found")
+	}
+	return tx.Commit(context.Background())
+}
+
+func UpdateStudentUserStatus(data model.StudentModel, tenantUUID, statusUUID uuid.UUID) error {
+	tx, err := db.Conn.Begin(context.Background())
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(context.Background())
+
+	result1, err := tx.Exec(context.Background(), `
+		update user_sch."user" set status_uuid=$1, updated_date=now() where uuid=$2 and tenant_uuid=$3
+	`, statusUUID, data.UserUUID, tenantUUID)
+	if err != nil {
+		return fmt.Errorf("update user status: %w", err)
+	}
+	if result1.RowsAffected() == 0 {
 		return errors.New("user not found")
 	}
 	return tx.Commit(context.Background())
 }
 
 func SoftDeleteStudent(data model.StudentModel, tenantUUID uuid.UUID) error {
-	return UpdateStudentStatus(data, tenantUUID, DB_UUID_STATUS_INACTIVE)
+	if err := UpdateStudentUserStatus(data, tenantUUID, DB_UUID_STATUS_INACTIVE); err != nil {
+		return err
+	}
+	if err := UpdateStudentStatus(data, tenantUUID, DB_UUID_STUDENT_ENROLLMENT_INACTIVE); err != nil {
+		return err
+	}
+	return nil
 }
 
 func SearchStudent(tenantUUID uuid.UUID, payload model.SearchPayload) ([]model.ReadStudentModelResult, *model.DataStatistics, error) {
@@ -173,7 +187,8 @@ func SearchStudent(tenantUUID uuid.UUID, payload model.SearchPayload) ([]model.R
 			,u.phone 
 			,u.email
 			,g."name" gender_name
-			,s2."name" status
+			,s3.name as status
+			,s2."name" student_status
 			,u.address
 			,s.parent_name 
 			,s.parent_email 
@@ -184,6 +199,7 @@ func SearchStudent(tenantUUID uuid.UUID, payload model.SearchPayload) ([]model.R
 		left join school_sch."class" c on s.class_uuid = c."uuid" 
 		join public.gender g on s.gender_uuid = g."uuid" 
 		join public.status s2 on s.status_uuid = s2."uuid" 
+		join public.status s3 on u.status_uuid = s3."uuid" 
 		where u.tenant_uuid = $1
 	)`
 	search := ""
@@ -197,7 +213,7 @@ func SearchStudent(tenantUUID uuid.UUID, payload model.SearchPayload) ([]model.R
 	if payload.Filter != nil {
 		if status, ok := (*payload.Filter)["status"].(string); ok && status != "" {
 			params = append(params, status)
-			where += " and lower(status)=lower($" + strconv.Itoa(len(params)) + ")"
+			where += " and lower(student_status)=lower($" + strconv.Itoa(len(params)) + ")"
 		}
 
 		if id, ok := (*payload.Filter)["uuid"].(string); ok && id != "" {
@@ -207,7 +223,7 @@ func SearchStudent(tenantUUID uuid.UUID, payload model.SearchPayload) ([]model.R
 	}
 
 	params = append(params, STATUS_DELETED)
-	where += " and lower(status) != lower($" + strconv.Itoa(len(params)) + ")"
+	where += " and lower(student_status) != lower($" + strconv.Itoa(len(params)) + ")"
 
 	count, err := db.GetSingleDataByQuery[model.CountResult](base+" select count(*) from datas where "+where, params...)
 	if err != nil {
@@ -269,4 +285,13 @@ func UserStudentValidity(data model.CreateStudentModel) error {
 		return errors.New("Multiple user found")
 	}
 	return nil
+}
+
+func GetUserStatus(statusCode string) (*uuid.UUID, error) {
+	var statusUUID uuid.UUID
+	err := db.Conn.QueryRow(context.Background(), `select uuid from public.status where lower(category) = 'student_enrollment' and lower(code) = lower($1)`, statusCode).Scan(&statusUUID)
+	if err != nil {
+		return nil, err
+	}
+	return &statusUUID, nil
 }

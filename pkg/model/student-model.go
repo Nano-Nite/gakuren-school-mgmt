@@ -36,6 +36,7 @@ type CreateStudentModel struct {
 	ParentEmail   *string    `json:"parent_email,omitempty"`
 	ParentPhone   *string    `json:"parent_phone,omitempty"`
 	ParentAddress *string    `json:"parent_address,omitempty"`
+	SchoolUUID    uuid.UUID  `json:"school_uuid,omitempty"`
 }
 
 type UpdateStudentModel struct {
@@ -61,6 +62,10 @@ type DeleteStudentModel struct {
 	UUID uuid.UUID `json:"uuid"`
 }
 
+type ActivateStudentModel struct {
+	UUID uuid.UUID `json:"uuid"`
+}
+
 type ReadStudentModelResult struct {
 	UUID          uuid.UUID `db:"uuid" json:"uuid"`
 	UserUUID      uuid.UUID `db:"user_uuid" json:"user_uuid"`
@@ -72,6 +77,7 @@ type ReadStudentModelResult struct {
 	Email         *string   `db:"email" json:"email,omitempty"`
 	GenderName    *string   `db:"gender_name" json:"gender_name,omitempty"`
 	Status        string    `db:"status" json:"status"`
+	StudentStatus string    `db:"student_status" json:"student_status"`
 	Address       *string   `db:"address" json:"address,omitempty"`
 	ParentName    *string   `db:"parent_name" json:"parent_name,omitempty"`
 	ParentEmail   *string   `db:"parent_email" json:"parent_email,omitempty"`

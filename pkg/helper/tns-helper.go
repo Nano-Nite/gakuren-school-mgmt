@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"time"
 
 	"gakuren-system.com/pkg/db"
 	"gakuren-system.com/pkg/model"
@@ -131,7 +132,7 @@ func InsertTNS(data model.CreateTNSModel, userData model.UserModel, tenantUUID, 
 		userData.ImgLocation,
 		userData.RoleUUID,
 		userData.StatusUUID,
-		userData.CreatedDate,
+		time.Now(),
 		userData.UpdatedDate,
 		userData.Version,
 		schoolUUID).Scan(&userUUID)
