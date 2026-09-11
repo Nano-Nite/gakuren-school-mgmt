@@ -167,9 +167,9 @@ func SoftDeleteStudent(data model.StudentModel, tenantUUID uuid.UUID) error {
 	if err := UpdateStudentUserStatus(data, tenantUUID, DB_UUID_STATUS_INACTIVE); err != nil {
 		return err
 	}
-	if err := UpdateStudentStatus(data, tenantUUID, DB_UUID_STUDENT_ENROLLMENT_INACTIVE); err != nil {
-		return err
-	}
+	// if err := UpdateStudentStatus(data, tenantUUID, DB_UUID_STUDENT_ENROLLMENT_INACTIVE); err != nil {
+	// 	return err
+	// }
 	return nil
 }
 
