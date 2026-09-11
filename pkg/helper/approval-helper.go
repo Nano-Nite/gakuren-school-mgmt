@@ -475,8 +475,8 @@ func ExecuteApproval(instanceUUID, schoolUUID, tenantUUID string, actedBy, roleU
 				}
 
 				if data.Activate {
-					err = tx.QueryRow(context.Background(), `update school_sch.student set status_uuid=$1,updated_date=now()
-						where uuid=$2 returning uuid`, DB_UUID_STATUS_INACTIVE, instanceEntityUUID).Scan(instanceEntityUUID)
+					err = tx.QueryRow(context.Background(), `update user_sch.user set status_uuid=$1,updated_date=now()
+						where uuid=$2 returning uuid`, DB_UUID_STATUS_INACTIVE, data.UserUUID).Scan(instanceEntityUUID)
 					if errors.Is(err, pgx.ErrNoRows) {
 						return false, errors.New("cancel user target not found")
 					}
@@ -484,8 +484,8 @@ func ExecuteApproval(instanceUUID, schoolUUID, tenantUUID string, actedBy, roleU
 						return false, fmt.Errorf("cancel user approval: %w", err)
 					}
 				} else {
-					err = tx.QueryRow(context.Background(), `update school_sch.student set status_uuid=$1,updated_date=now()
-						where uuid=$2 returning uuid`, DB_UUID_STATUS_ACTIVE, instanceEntityUUID).Scan(instanceEntityUUID)
+					err = tx.QueryRow(context.Background(), `update user_sch.user set status_uuid=$1,updated_date=now()
+						where uuid=$2 returning uuid`, DB_UUID_STATUS_ACTIVE, data.UserUUID).Scan(instanceEntityUUID)
 					if errors.Is(err, pgx.ErrNoRows) {
 						return false, errors.New("cancel user target not found")
 					}
