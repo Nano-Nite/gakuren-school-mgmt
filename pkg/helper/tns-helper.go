@@ -426,7 +426,7 @@ func UpdateTNS(data model.UpdateTNSModel, tenantUUID, schoolUUID uuid.UUID) erro
 
 	// update title
 	if data.Titles != nil {
-		selectedTitles, err := db.GetMultipleDataByQuery[model.ResultTitleModel](`select * from employee.employee_title where employee_uuid = $1`, data.EmployeeUUID)
+		selectedTitles, err := db.GetMultipleDataByQuery[model.ResultTitleModel](`select title_uuid as uuid from employee.employee_title where employee_uuid = $1`, data.EmployeeUUID)
 		if err != nil {
 			return fmt.Errorf("get employee title: %w", err)
 		}
