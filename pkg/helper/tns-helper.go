@@ -426,14 +426,20 @@ func UpdateTNS(data model.UpdateTNSModel, tenantUUID, schoolUUID uuid.UUID) erro
 
 	// update title
 	if data.Titles != nil {
-		deleteResult, err := tx.Exec(context.Background(), `
-			delete from employee.employee_title where employee_uuid = $1
-		`, data.EmployeeUUID)
+		selectedTitles, err := db.GetMultipleDataByQuery[model.ResultTitleModel](`select * from employee.employee_title where employee_uuid = $1`, data.EmployeeUUID)
 		if err != nil {
-			return fmt.Errorf("delete user title: %w", err)
+			return fmt.Errorf("get employee title: %w", err)
 		}
-		if deleteResult.RowsAffected() == 0 {
-			return errors.New("employee title not found")
+		if len(*selectedTitles) > 0 {
+			deleteResult, err := tx.Exec(context.Background(), `
+				delete from employee.employee_title where employee_uuid = $1
+			`, data.EmployeeUUID)
+			if err != nil {
+				return fmt.Errorf("delete user title: %w", err)
+			}
+			if deleteResult.RowsAffected() == 0 {
+				return errors.New("employee title not found")
+			}
 		}
 
 		var titles uuid.UUIDs
@@ -659,6 +665,7 @@ func SearchTNSDetail(schoolUUID, tenantUUID, userUUID, tnsUUID uuid.UUID) (*mode
 			SELECT COALESCE(
 				jsonb_agg(
 					jsonb_build_object(
+						'uuid', ee.uuid,
 						'institution_name', ee.institution_name, 
 						'code', el.code, 
 						'major', ee.major, 
@@ -672,7 +679,12 @@ func SearchTNSDetail(schoolUUID, tenantUUID, userUUID, tnsUUID uuid.UUID) (*mode
 			WHERE ee.employee_uuid = e.uuid
 		) AS educations
 		,(
-			SELECT COALESCE(jsonb_agg(p.name), '[]'::jsonb)
+			SELECT COALESCE(jsonb_agg(
+					jsonb_build_object(
+						'uuid', p.uuid,
+						'name', p.name
+					)
+				), '[]'::jsonb)
 			FROM employee.employee_position ep 
 			JOIN public.position p ON p.uuid = ep.position_uuid  
 			WHERE ep.employee_uuid = e.uuid
@@ -681,6 +693,7 @@ func SearchTNSDetail(schoolUUID, tenantUUID, userUUID, tnsUUID uuid.UUID) (*mode
 			select coalesce(
 				jsonb_agg(
 					jsonb_build_object(
+						'uuid', t.uuid,
 						'abbr_name', t.abbr_name, 
 						'is_prefix', t.is_prefix, 
 						'sequence', t.sequence
@@ -691,7 +704,12 @@ func SearchTNSDetail(schoolUUID, tenantUUID, userUUID, tnsUUID uuid.UUID) (*mode
 			where et.employee_uuid = e.uuid
 		) as titles
 		,(
-			select coalesce(jsonb_agg(s3.name), '[]'::jsonb)
+			select coalesce(jsonb_agg(
+					jsonb_build_object(
+						'uuid', s3.uuid,
+						'name', s3.name
+					)
+				), '[]'::jsonb)
 			from employee.employee_subject es 
 			join public.subject s3 on es.subject_uuid = s3.uuid
 			where es.employee_uuid = e.uuid

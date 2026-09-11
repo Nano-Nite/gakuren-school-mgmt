@@ -130,8 +130,8 @@ type ReadTNSDetailModelResult struct {
 	EmployeeStatus string            `db:"employee_status" json:"employee_status,omitempty"`
 	Educations     []json.RawMessage `db:"educations" json:"educations,omitempty"`
 	Titles         []json.RawMessage `db:"titles" json:"titles,omitempty"`
-	Positions      []string          `db:"positions" json:"positions,omitempty"`
-	Subject        []string          `db:"subject" json:"subject,omitempty"`
+	Positions      []json.RawMessage `db:"positions" json:"positions,omitempty"`
+	Subject        []json.RawMessage `db:"subject" json:"subject,omitempty"`
 }
 
 type HomeroomTeacherModel struct {
