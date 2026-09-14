@@ -70,6 +70,11 @@ const CREATE_TNS_PERMISSION = "teacherandstaff.create"
 const UPDATE_TNS_PERMISSION = "teacherandstaff.update"
 const DELETE_TNS_PERMISSION = "teacherandstaff.delete"
 
+// TRUSTED DEVICE
+const CREATE_SETTING_DEVICE_PERMISSION = "setting.device.create"
+const UPDATE_SETTING_DEVICE_PERMISSION = "setting.device.update"
+const DELETE_SETTING_DEVICE_PERMISSION = "setting.device.delete"
+
 // const SUBMIT_CLASS_PERMISSION = "class.submit"
 // const APPROVE_CLASS_PERMISSION = "class.approve"
 // const REJECT_CLASS_PERMISSION = "class.reject"
