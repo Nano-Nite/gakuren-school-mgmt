@@ -96,7 +96,14 @@ func SetupDeviceRoute(app *fiber.App, API_VERSION string) {
 			if tx.Commit(c.Context()) != nil {
 				return helper.ReturnResponse(c, fiber.StatusInternalServerError, "Failed to commit Trusted Device", nil, nil)
 			}
-			return helper.ReturnResponse(c, fiber.StatusOK, "success", map[string]any{"trusted_device": trustedDeviceID}, nil)
+
+			result := make(map[string]interface{})
+			result["device_uuid"] = trustedDeviceID
+			result["school_uiud"] = schoolUUID
+			result["location_uuid"] = dataTrustedDevice.LocationUUID
+			result["trusted"] = true
+
+			return helper.ReturnResponse(c, fiber.StatusOK, "success", result, nil)
 		}
 
 		return helper.ReturnResponse(c, fiber.StatusOK, "success", nil, nil)
