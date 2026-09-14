@@ -99,7 +99,7 @@ func SetupDeviceRoute(app *fiber.App, API_VERSION string) {
 
 			result := make(map[string]interface{})
 			result["device_uuid"] = trustedDeviceID
-			result["school_uiud"] = schoolUUID
+			result["school_uuid"] = schoolUUID
 			result["location_uuid"] = dataTrustedDevice.LocationUUID
 			result["trusted"] = true
 
