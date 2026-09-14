@@ -12,7 +12,6 @@ import (
 func SetupApprovalRoute(app *fiber.App, API_VERSION string) {
 	app.Post(API_VERSION+"/school/approval/my-approval", func(c fiber.Ctx) error {
 		payload := new(model.SearchPayload)
-		// tenantUUID := c.Get("tenant_uuid")
 		authHeader := c.Get("Authorization")
 
 		if len(authHeader) == 0 {
@@ -20,22 +19,15 @@ func SetupApprovalRoute(app *fiber.App, API_VERSION string) {
 		}
 
 		//* validate user using access token
-		userUUID, err := helper.GetUserUUIDByAccessToken(authHeader)
+		_, _, userUUID, err := helper.GetUserUUIDByAccessToken(authHeader)
 		if err != nil {
 			return helper.ReturnResponse(c, fiber.StatusUnauthorized, "Missing or invalid token", nil, err)
-		}
-		if userUUID == nil {
-			return helper.ReturnResponse(c, fiber.StatusUnauthorized, "Missing or invalid token", nil, nil)
 		}
 
 		//* validate body
 		if err := c.Bind().Body(payload); err != nil {
 			return helper.ReturnResponse(c, fiber.StatusBadRequest, "Invalid request body format", nil, err)
 		}
-
-		// if len(tenantUUID) == 0 {
-		// 	return helper.ReturnResponse(c, fiber.StatusBadRequest, "Invalid or Missing between request body and header", nil, nil)
-		// }
 
 		selectedUser, err := helper.GetUser(userUUID.String())
 		if err != nil {
@@ -57,27 +49,18 @@ func SetupApprovalRoute(app *fiber.App, API_VERSION string) {
 
 	app.Get(API_VERSION+"/school/approval/my-approval", func(c fiber.Ctx) error {
 		approvalUUID := c.Query("uuid")
-		tenantUUID := c.Get("tenant_uuid")
-		authHeader := c.Get("Authorization")
 
-		if len(approvalUUID) == 0 || len(tenantUUID) == 0 || len(authHeader) == 0 {
+		if len(approvalUUID) == 0 {
 			return helper.ReturnResponse(c, fiber.StatusBadRequest, "Bad request", nil, nil)
 		}
 
 		//* validate user using access token
-		userUUID, err := helper.GetUserUUIDByAccessToken(authHeader)
+		_, tenantUUID, _, err := helper.ValidateRequest(c)
 		if err != nil {
 			return helper.ReturnResponse(c, fiber.StatusUnauthorized, "Missing or invalid token", nil, err)
 		}
-		if userUUID == nil {
-			return helper.ReturnResponse(c, fiber.StatusUnauthorized, "Missing or invalid token", nil, nil)
-		}
 
-		if len(tenantUUID) == 0 {
-			return helper.ReturnResponse(c, fiber.StatusBadRequest, "Invalid or Missing between request body and header", nil, nil)
-		}
-
-		result, err := helper.DetailApproval(approvalUUID, tenantUUID)
+		result, err := helper.DetailApproval(approvalUUID, tenantUUID.String())
 		if err != nil {
 			return helper.ReturnResponse(c, fiber.StatusInternalServerError, "Internal server error, try again in a while", nil, nil)
 		}
@@ -87,29 +70,11 @@ func SetupApprovalRoute(app *fiber.App, API_VERSION string) {
 
 	app.Patch(API_VERSION+"/school/approval/my-approval/execute", func(c fiber.Ctx) error {
 		payload := new(model.ExecuteApprovalPayload)
-		tenantUUID := c.Get("tenant_uuid")
-		schoolUUID := c.Get("school_uuid")
-		authHeader := c.Get("Authorization")
-
-		if len(tenantUUID) == 0 || len(authHeader) == 0 {
-			return helper.ReturnResponse(c, fiber.StatusBadRequest, "Bad request", nil, nil)
-		}
 
 		//* validate user using access token
-		userUUID, err := helper.GetUserUUIDByAccessToken(authHeader)
+		schoolUUID, tenantUUID, userUUID, err := helper.ValidateRequest(c)
 		if err != nil {
 			return helper.ReturnResponse(c, fiber.StatusUnauthorized, "Missing or invalid token", nil, err)
-		}
-		if userUUID == nil {
-			return helper.ReturnResponse(c, fiber.StatusUnauthorized, "Missing or invalid token", nil, nil)
-		}
-
-		if len(tenantUUID) == 0 {
-			return helper.ReturnResponse(c, fiber.StatusBadRequest, "Invalid or Missing between request body and header", nil, nil)
-		}
-
-		if len(schoolUUID) == 0 {
-			return helper.ReturnResponse(c, fiber.StatusBadRequest, "Invalid or Missing between request body and header", nil, nil)
 		}
 
 		//* validate body
@@ -127,7 +92,7 @@ func SetupApprovalRoute(app *fiber.App, API_VERSION string) {
 			return helper.ReturnResponse(c, fiber.StatusInternalServerError, "Internal server error, try again in a while", nil, nil)
 		}
 
-		selectedApproval, err := helper.DetailApproval(payload.UUID, tenantUUID)
+		selectedApproval, err := helper.DetailApproval(payload.UUID, tenantUUID.String())
 		if err != nil {
 			return helper.ReturnResponse(c, fiber.StatusInternalServerError, "Internal server error, try again in a while", nil, nil)
 		}
@@ -150,7 +115,7 @@ func SetupApprovalRoute(app *fiber.App, API_VERSION string) {
 		if strings.TrimSpace(payload.Note) != "" {
 			note = &payload.Note
 		}
-		finalized, err := helper.ExecuteApproval(payload.UUID, schoolUUID, tenantUUID, selectedUser.UUID, selectedUser.RoleUUID, command, note)
+		finalized, err := helper.ExecuteApproval(payload.UUID, schoolUUID.String(), tenantUUID.String(), selectedUser.UUID, selectedUser.RoleUUID, command, note)
 		if err != nil {
 			switch {
 			case errors.Is(err, helper.ErrApprovalFinalized):

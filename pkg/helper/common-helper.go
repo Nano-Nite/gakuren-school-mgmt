@@ -93,20 +93,20 @@ func CalculateDataStatisticResult(count *model.CountResult, payload model.Search
 	return dataStat
 }
 
-func GetUserUUIDByAccessToken(authHeader string) (*uuid.UUID, error) {
+func GetUserUUIDByAccessToken(authHeader string) (*uuid.UUID, *uuid.UUID, *uuid.UUID, error) {
 	// authHeader := c.Get("Authorization")
 
 	if authHeader == "" || !strings.HasPrefix(authHeader, "Bearer ") {
-		return nil, errors.New("Missing or invalid token")
+		return nil, nil, nil, errors.New("Missing or invalid token")
 	}
 	tokenString := strings.TrimPrefix(authHeader, "Bearer ")
 	if strings.TrimSpace(tokenString) == "" {
-		return nil, errors.New("token is required")
+		return nil, nil, nil, errors.New("token is required")
 	}
 
 	publicKey, err := ParsePublicKey(os.Getenv("RSA_PUBLIC_KEY"))
 	if err != nil {
-		return nil, fmt.Errorf("parse RSA public key: %w", err)
+		return nil, nil, nil, fmt.Errorf("parse RSA public key: %w", err)
 	}
 
 	claims := new(model.AccessTokenClaims)
@@ -117,15 +117,23 @@ func GetUserUUIDByAccessToken(authHeader string) (*uuid.UUID, error) {
 		return publicKey, nil
 	})
 
-	if claims.RegisteredClaims.Subject == "" {
-		return nil, errors.New("missing subject in token claims")
+	if claims.RegisteredClaims.Subject == "" || claims.TenantUUID == "" || claims.SchoolUUID == "" || claims.Username == "" {
+		return nil, nil, nil, errors.New("missing data in token claims")
 	}
 
 	subjectUUID, err := uuid.Parse(claims.RegisteredClaims.Subject)
 	if err != nil {
-		return nil, fmt.Errorf("parse subject as UUID: %w", err)
+		return nil, nil, nil, fmt.Errorf("parse subject as UUID: %w", err)
 	}
-	return &subjectUUID, nil
+	tenantUUID, err := uuid.Parse(claims.TenantUUID)
+	if err != nil {
+		return nil, nil, nil, fmt.Errorf("parse tenant as UUID: %w", err)
+	}
+	schoolUUID, err := uuid.Parse(claims.SchoolUUID)
+	if err != nil {
+		return nil, nil, nil, fmt.Errorf("parse school as UUID: %w", err)
+	}
+	return &subjectUUID, &schoolUUID, &tenantUUID, nil
 }
 
 func GetVariableUsingValue(actionCodeValue string) (*model.VariableModel, error) {
@@ -446,7 +454,7 @@ func MapIntoStuct[T any](source map[string]interface{}) (*T, error) {
 }
 
 func ValidateRequest(c fiber.Ctx) (uuid.UUID, uuid.UUID, uuid.UUID, error) {
-	tenantUUID, err := uuid.Parse(c.Get("tenant_uuid"))
+	/* tenantUUID, err := uuid.Parse(c.Get("tenant_uuid"))
 	if err != nil {
 		return uuid.Nil, uuid.Nil, uuid.Nil, errors.New("invalid or missing tenant UUID")
 	}
@@ -454,16 +462,16 @@ func ValidateRequest(c fiber.Ctx) (uuid.UUID, uuid.UUID, uuid.UUID, error) {
 	schoolUUID, err := uuid.Parse(c.Get("school_uuid"))
 	if err != nil {
 		return uuid.Nil, uuid.Nil, uuid.Nil, errors.New("invalid or missing School UUID")
-	}
+	} */
 
-	userUUID, err := GetUserUUIDByAccessToken(c.Get("Authorization"))
+	userUUID, schoolUUID, tenantUUID, err := GetUserUUIDByAccessToken(c.Get("Authorization"))
 	if err != nil || userUUID == nil {
 		if err == nil {
 			err = errors.New("missing user UUID")
 		}
 		return uuid.Nil, uuid.Nil, uuid.Nil, err
 	}
-	return schoolUUID, tenantUUID, *userUUID, nil
+	return *schoolUUID, *tenantUUID, *userUUID, nil
 }
 
 func ValidateApprovalBypass(userUUID uuid.UUID) (bool, error) {

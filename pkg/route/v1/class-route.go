@@ -18,27 +18,11 @@ func SetupClassRoute(app *fiber.App, API_VERSION string) {
 	// create
 	app.Post(classBaseURL+"/create", func(c fiber.Ctx) error {
 		payload := new(model.CreateClassModel)
-		tenantUUIDHeader := c.Get("tenant_uuid")
-		schoolUUIDHeader := c.Get("school_uuid")
-		authHeader := c.Get("Authorization")
 
 		//* validate user using access token
-		userUUID, err := helper.GetUserUUIDByAccessToken(authHeader)
+		schoolUUID, tenantUUID, userUUID, err := helper.ValidateRequest(c)
 		if err != nil {
 			return helper.ReturnResponse(c, fiber.StatusUnauthorized, "Missing or invalid token", nil, err)
-		}
-		if userUUID == nil {
-			return helper.ReturnResponse(c, fiber.StatusUnauthorized, "Missing or invalid token", nil, nil)
-		}
-
-		//* validate tenant id and school id
-		tenantUUID, err := uuid.Parse(tenantUUIDHeader)
-		if err != nil {
-			return helper.ReturnResponse(c, fiber.StatusBadRequest, "Invalid or Missing between request body and header", nil, err)
-		}
-		schoolUUID, err := uuid.Parse(schoolUUIDHeader)
-		if err != nil {
-			return helper.ReturnResponse(c, fiber.StatusBadRequest, "Invalid or Missing between request body and header", nil, err)
 		}
 
 		//* validate body
@@ -61,7 +45,7 @@ func SetupClassRoute(app *fiber.App, API_VERSION string) {
 		}
 
 		//* validate payload
-		if len(payload.Name) == 0 || payload.Level == 0 || len(tenantUUIDHeader) == 0 {
+		if len(payload.Name) == 0 || payload.Level == 0 {
 			return helper.ReturnResponse(c, fiber.StatusBadRequest, "Invalid or Missing between request body and header", nil, nil)
 		}
 
@@ -132,7 +116,7 @@ func SetupClassRoute(app *fiber.App, API_VERSION string) {
 				instance.ActionCode = helper.ACTION_CODE_CREATE
 				instance.RequestData = json.RawMessage(payloadJson)
 				instance.StatusUUID = helper.DB_UUID_STATUS_ACTIVE
-				instance.RequestedBy = *userUUID
+				instance.RequestedBy = userUUID
 				instance.FinalizedBy = nil
 				instance.FinalizedDate = nil
 				instance.UpdatedDate = nil
@@ -148,7 +132,7 @@ func SetupClassRoute(app *fiber.App, API_VERSION string) {
 				action.ApprovalInstanceUUID = *instanceUUID
 				action.ApprovalStepUUID = nil
 				action.ActionCode = helper.ACTION_CODE_SUBMIT
-				action.ActedBy = *userUUID
+				action.ActedBy = userUUID
 				action.Note = nil
 				action.CreatedDate = time.Now()
 

@@ -23,8 +23,10 @@ type JWTService struct {
 }
 
 type AccessTokenClaims struct {
-	Username string   `json:"username"`
-	Roles    []string `json:"roles,omitempty"`
+	TenantUUID string   `json:"tenant_uuid"`
+	SchoolUUID string   `json:"school_uuid"`
+	Username   string   `json:"username"`
+	Roles      []string `json:"roles,omitempty"`
 
 	jwt.RegisteredClaims
 }
