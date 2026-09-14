@@ -88,3 +88,29 @@ func InsertTrustedDeviceKey(data model.TrustedDeviceKeyModel, tx pgx.Tx, ctx con
 
 	return nil
 }
+
+func GetTrustedDeviceByUUID(data, schoolUUID uuid.UUID) (*model.TrustedDeviceModel, error) {
+	query := `
+		select
+			td."uuid" 
+			,td.location_uuid
+			,td.school_uuid 
+		from attendance_sch.trusted_device_key tdk 
+		join attendance_sch.trusted_device td on tdk.trusted_device_uuid = td.uuid
+		where td.uuid = $1 and td.school_uuid = $2
+		;
+	`
+
+	selectedDetail, err := db.GetSingleDataByQuery[model.TrustedDeviceModel](query, data, schoolUUID)
+	if err != nil {
+		if err.Error() != "no rows in result set" {
+			return nil, err
+		}
+	}
+	if selectedDetail == nil {
+		return nil, errors.New("Fail to get detail data")
+	}
+
+	return selectedDetail, nil
+
+}

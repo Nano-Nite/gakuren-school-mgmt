@@ -12,6 +12,8 @@ import (
 )
 
 func SetupDeviceRoute(app *fiber.App, API_VERSION string) {
+
+	// register or create
 	app.Post(API_VERSION+"/school/trusted-device/register", func(c fiber.Ctx) error {
 		payload := new(model.RegisterDevicePayload)
 
@@ -107,5 +109,34 @@ func SetupDeviceRoute(app *fiber.App, API_VERSION string) {
 		}
 
 		return helper.ReturnResponse(c, fiber.StatusOK, "success", nil, nil)
+	})
+
+	// get
+	// get detail
+	app.Get(API_VERSION+"/school/trusted-device/:id", func(c fiber.Ctx) error {
+		idParam := c.Params("id")
+
+		trustedDeviceUUID, err := uuid.Parse(idParam)
+		if err != nil {
+			return helper.ReturnResponse(c, fiber.StatusUnauthorized, "Missing or invalid authentication data", nil, err)
+		}
+
+		schoolUUID, _, _, err := helper.ValidateRequest(c)
+		if err != nil {
+			return helper.ReturnResponse(c, fiber.StatusUnauthorized, "Missing or invalid authentication data", nil, err)
+		}
+
+		result, err := helper.GetTrustedDeviceByUUID(trustedDeviceUUID, schoolUUID)
+		if err != nil {
+			return helper.ReturnResponse(c, fiber.StatusBadRequest, "Failed to search users", nil, err)
+		}
+
+		resultMap := make(map[string]interface{})
+		resultMap["device_uuid"] = result.UUID
+		resultMap["location_uuid"] = result.LocationUUID
+		resultMap["school_uuid"] = result.SchoolUUID
+		resultMap["trusted"] = true
+
+		return helper.ReturnResponse(c, fiber.StatusOK, "success", resultMap, nil)
 	})
 }
